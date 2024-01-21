@@ -4,7 +4,10 @@ main:
 	endbr64
 	pushq	%rbp
 	movq	%rsp, %rbp
-	movl	$2, -4(%rbp)
-	movl	-4(%rbp), %eax
+
+	pushq	$2
+	movq 	-8(%rbp), %rax	// move the value previously pushed into rax
+
+	movq	%rbp, %rsp		// fix rsp offset
 	popq	%rbp
 	ret

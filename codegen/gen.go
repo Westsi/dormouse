@@ -1,6 +1,8 @@
 package codegen
 
-import "github.com/westsi/dormouse/ast"
+import (
+	"github.com/westsi/dormouse/ast"
+)
 
 type CodeGenerator interface {
 	Generate()
