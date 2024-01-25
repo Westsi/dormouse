@@ -14,9 +14,22 @@ type CodeGenerator interface {
 	GenerateReturn(r *ast.ReturnStatement)
 	GenerateExit(e *ast.Node)
 	GenerateLabel(node *ast.Node)
+	GenerateInfix(node *ast.Node)
 }
 
 type VTabVar struct {
 	Name string
 	Type string
 }
+
+type StorageLoc int
+
+const (
+	Stack StorageLoc = iota
+	RAX
+	RBX
+	RCX
+	RDX
+)
+
+var StorageLocs = []string{"%rax", "%rbx", "%rcx", "%rdx"}
