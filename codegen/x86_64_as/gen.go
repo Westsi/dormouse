@@ -146,6 +146,7 @@ func (g *X64Generator) GenerateVarDef(v *ast.VarStatement) {
 	g.VirtualStack.Push(codegen.VTabVar{Name: v.Name.Value, Type: v.Type.Value})
 	switch v.Type.Value {
 	case "int":
+		// TODO: this only works with infix ops in the def because of gcc optimizations afaik.
 		g.out.WriteString("pushq $" + v.Value.String() + "\n") // load value into stack
 	}
 }
