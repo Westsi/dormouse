@@ -1,5 +1,10 @@
 int main() {
-    int x = 8*2
+    int x = 8
     int y = 5
-    return x + y
+
+    if (x > y) {
+        return x
+    } else {
+        return y
+    }
 }

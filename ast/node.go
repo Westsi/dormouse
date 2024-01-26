@@ -158,6 +158,8 @@ type IfExpression struct {
 }
 
 func (i *IfExpression) expressionNode() {}
+func (i *IfExpression) statementNode()  {}
+func (i *IfExpression) NType() string   { return "IfExpression" }
 func (i *IfExpression) Literal() string {
 	return fmt.Sprintf("token: %s, condition: %s, consequence: %s, alternative: %s\n", i.Token.Tok.String(), i.Condition.Literal(), i.Consequence.Literal(), i.Alternative.Literal())
 }
@@ -242,22 +244,4 @@ func (c *CallExpression) String() string {
 		args = append(args, arg.String())
 	}
 	return fmt.Sprintf("(%s(%s))", c.Function.String(), strings.Join(args, ", "))
-}
-
-type EntrypointFunctionDefinition struct {
-	Token lex.LexedTok
-	// Entrypoint functions have no parameters
-	// In addition, they should never be called by the user - calls for them are handled by the compiler
-	Body *BlockStatement
-	Name *Identifier
-}
-
-func (e *EntrypointFunctionDefinition) expressionNode() {}
-func (e *EntrypointFunctionDefinition) statementNode()  {}
-func (e *EntrypointFunctionDefinition) NType() string   { return "EntrypointFunctionDefinition" }
-func (e *EntrypointFunctionDefinition) Literal() string {
-	return fmt.Sprintf("token: %s, body: %s, name: %s\n", e.Token.Tok.String(), e.Body.Literal(), e.Name.Literal())
-}
-func (e *EntrypointFunctionDefinition) String() string {
-	return fmt.Sprintf("(entrypoint %s {%s})", e.Name.String(), e.Body.String())
 }

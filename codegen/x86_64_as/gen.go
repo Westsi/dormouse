@@ -21,6 +21,7 @@ type X64Generator struct {
 	AST              ast.Program
 	VirtualStack     *util.Stack[codegen.VTabVar]
 	VirtualRegisters map[codegen.StorageLoc]string
+	LabelCounter     int
 }
 
 func New(fpath string, ast *ast.Program) *X64Generator {
@@ -30,6 +31,7 @@ func New(fpath string, ast *ast.Program) *X64Generator {
 		AST:              *ast,
 		VirtualStack:     util.NewStack[codegen.VTabVar](),
 		VirtualRegisters: map[codegen.StorageLoc]string{},
+		LabelCounter:     0,
 	}
 	generator.out.WriteString(".text\n.globl main\n")
 	os.MkdirAll("out/x86_64", os.ModePerm)
@@ -112,23 +114,27 @@ func (g *X64Generator) Generate() {
 	}
 }
 
-func (g *X64Generator) GenerateExpression(node ast.Expression) {
+func (g *X64Generator) GenerateExpression(node ast.Expression) codegen.StorageLoc {
 	tracer.Trace("GenerateExpression")
 	defer tracer.Untrace("GenerateExpression")
 	switch node := node.(type) {
 	case *ast.InfixExpression:
 		g.GenerateInfix(node)
 	case *ast.Identifier:
-		g.GenerateIdentifier(node)
+		return g.GenerateIdentifier(node)
 	case *ast.IntegerLiteral:
-		g.out.WriteString("movq $" + fmt.Sprintf("%d", node.Value) + ", %rax\n")
+		g.out.WriteString("movq $" + fmt.Sprintf("%d", node.Value) + ", %rax\n") //TODO: give this same treatment as the identifier case - picking regs
+	case *ast.IfExpression:
+		g.GenerateIf(node)
 	}
+	return codegen.NULLSTORAGE
 }
 
 func (g *X64Generator) GenerateBlock(b *ast.BlockStatement) {
 	tracer.Trace("GenerateBlock")
 	defer tracer.Untrace("GenerateBlock")
 	for _, stmt := range b.Statements {
+		fmt.Println(stmt.NType())
 		switch stmt := stmt.(type) {
 		case *ast.FunctionDefinition:
 			g.GenerateFunction(stmt)
@@ -136,6 +142,8 @@ func (g *X64Generator) GenerateBlock(b *ast.BlockStatement) {
 			g.GenerateVarDef(stmt)
 		case *ast.ReturnStatement:
 			g.GenerateReturn(stmt)
+		case *ast.ExpressionStatement:
+			g.GenerateExpression(stmt.Expression)
 		}
 	}
 }
@@ -205,7 +213,11 @@ func (g *X64Generator) GenerateReturn(r *ast.ReturnStatement) {
 	tracer.Trace("GenerateReturn")
 	defer tracer.Untrace("GenerateReturn")
 	// clean up stack
-	g.GenerateExpression(r.ReturnValue)
+	fmt.Printf("returning %s\n", r.ReturnValue.String())
+	sloc := g.GenerateExpression(r.ReturnValue)
+	if sloc != codegen.NULLSTORAGE && sloc != codegen.RAX {
+		g.out.WriteString("movq " + codegen.StorageLocs[sloc] + ", %rax\n")
+	}
 	g.out.WriteString("movq %rbp, %rsp\n")
 	g.out.WriteString("popq %rbp\n")
 	g.out.WriteString("ret\n")
@@ -220,14 +232,39 @@ func (g *X64Generator) GenerateExit(e *ast.Node) {
 	g.out.WriteString("syscall\n")
 }
 
-func (g *X64Generator) GenerateLabel(node *ast.Node) {
-
+func (g *X64Generator) GenerateLabel() string {
+	tracer.Trace("GenerateLabel")
+	defer tracer.Untrace("GenerateLabel")
+	g.out.WriteString(fmt.Sprintf(".L%d:\n", g.LabelCounter))
+	g.LabelCounter++
+	return fmt.Sprintf(".L%d", g.LabelCounter-1)
 }
 
 func (g *X64Generator) GenerateInfix(node *ast.InfixExpression) {
 	tracer.Trace("GenerateInfix")
 	defer tracer.Untrace("GenerateInfix")
-	var rightS, leftS string
+
+	leftS, rightS := g.GetInfixOperands(node)
+
+	switch node.Operator {
+	case "+":
+		g.out.WriteString("addq ")
+	case "-":
+		g.out.WriteString("subq ")
+	case "*":
+		g.out.WriteString("imulq ")
+		// TODO: implement division
+	}
+	g.out.WriteString(rightS + ", " + leftS + "\n")
+
+	g.out.WriteString("\n")
+}
+
+func (g *X64Generator) GetInfixOperands(node *ast.InfixExpression) (string, string) {
+	tracer.Trace("GetInfixOperands")
+	defer tracer.Untrace("GetInfixOperands")
+	fmt.Println(node.Left)
+	var leftS, rightS string
 	switch left := node.Left.(type) {
 	case *ast.Identifier:
 		g.GenerateIdentifier(left)
@@ -242,18 +279,50 @@ func (g *X64Generator) GenerateInfix(node *ast.InfixExpression) {
 	case *ast.IntegerLiteral:
 		rightS = "$" + fmt.Sprintf("%d", right.Value)
 	}
+	return leftS, rightS
+}
 
-	switch node.Operator {
-	case "+":
-		g.out.WriteString("addq ")
-	case "-":
-		g.out.WriteString("subq ")
-	case "*":
-		g.out.WriteString("imulq ")
-		// TODO: implement division
+func (g *X64Generator) GenerateIf(i *ast.IfExpression) {
+	tracer.Trace("GenerateIf")
+	defer tracer.Untrace("GenerateIf")
+	// check if condition is true
+	// to do this, check what the comparative expr is and generate the corresponding jump instruction
+	separator := i.Condition.(*ast.InfixExpression).Operator
+	leftS, rightS := g.GetInfixOperands(i.Condition.(*ast.InfixExpression))
+
+	// cmpl left, right
+	// jump to true case label
+	// false case code
+	// jump to end of true case section
+
+	// e.g.
+	// cmpq -4(%rbp), %rax
+	// je .L1
+	// movq $1, %rax
+	// jmp .L2
+	// .L1:
+	// movq $0, %rax
+	// .L2:
+	// ...
+
+	predictedTrueLabel := fmt.Sprintf(".L%d", g.LabelCounter)
+	predictedEndLabel := fmt.Sprintf(".L%d", g.LabelCounter+1)
+
+	g.out.WriteString("cmpq " + rightS + ", " + leftS + "\n")
+	switch separator {
+	case "==":
+		g.out.WriteString("je " + predictedTrueLabel + "\n")
+	case "!=":
+		g.out.WriteString("jne " + predictedTrueLabel + "\n")
+	case "<":
+		g.out.WriteString("jl " + predictedTrueLabel + "\n")
+	case ">":
+		g.out.WriteString("jg " + predictedTrueLabel + "\n")
 	}
-	g.out.WriteString(rightS + ", " + leftS + "\n")
-
-	g.out.WriteString("\n")
+	g.GenerateBlock(i.Alternative)
+	g.out.WriteString("jmp " + predictedEndLabel + "\n")
+	g.GenerateLabel()
+	g.GenerateBlock(i.Consequence)
+	g.GenerateLabel()
 
 }

@@ -15,6 +15,7 @@ type CodeGenerator interface {
 	GenerateExit(e *ast.Node)
 	GenerateLabel(node *ast.Node)
 	GenerateInfix(node *ast.Node)
+	GenerateIf(i *ast.IfExpression)
 }
 
 type VTabVar struct {
@@ -38,6 +39,7 @@ const (
 	R13
 	R14
 	R15
+	NULLSTORAGE
 )
 
 // var Sls = []StorageLoc{Stack, RAX, RBX, RCX, RDX, R8, R9, R10, R11, R12, R13, R14, R15}
