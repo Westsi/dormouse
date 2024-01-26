@@ -318,6 +318,10 @@ func (g *X64Generator) GenerateIf(i *ast.IfExpression) {
 		g.out.WriteString("jl " + predictedTrueLabel + "\n")
 	case ">":
 		g.out.WriteString("jg " + predictedTrueLabel + "\n")
+	case "<=":
+		g.out.WriteString("jle " + predictedTrueLabel + "\n")
+	case ">=":
+		g.out.WriteString("jge " + predictedTrueLabel + "\n")
 	}
 	g.GenerateBlock(i.Alternative)
 	g.out.WriteString("jmp " + predictedEndLabel + "\n")
