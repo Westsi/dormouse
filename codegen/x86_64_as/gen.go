@@ -16,20 +16,20 @@ import (
 // generates asm for x86_64 to be compiled with as
 
 type X64Generator struct {
-	fpath               string
-	out                 strings.Builder
-	AST                 ast.Program
-	VirtualStack        *util.Stack[codegen.VTabVar]
-	VariableStorageLocs map[string]codegen.StorageLoc
+	fpath            string
+	out              strings.Builder
+	AST              ast.Program
+	VirtualStack     *util.Stack[codegen.VTabVar]
+	VirtualRegisters map[codegen.StorageLoc]string
 }
 
 func New(fpath string, ast *ast.Program) *X64Generator {
 	generator := &X64Generator{
-		fpath:               fpath,
-		out:                 strings.Builder{},
-		AST:                 *ast,
-		VirtualStack:        util.NewStack[codegen.VTabVar](),
-		VariableStorageLocs: map[string]codegen.StorageLoc{},
+		fpath:            fpath,
+		out:              strings.Builder{},
+		AST:              *ast,
+		VirtualStack:     util.NewStack[codegen.VTabVar](),
+		VirtualRegisters: map[codegen.StorageLoc]string{},
 	}
 	generator.out.WriteString(".text\n.globl main\n")
 	os.MkdirAll("out/x86_64", os.ModePerm)
@@ -65,14 +65,15 @@ func (g *X64Generator) GetVarStackOffset(name string) int {
 	defer tracer.Untrace("GetVarStackOffset")
 	// get offset from bottom of stack in terms of indices and multiply by sizes to get bits
 	sizeBelow := 0
-	for i, v := range g.VirtualStack.Elements {
+	fmt.Println(g.VirtualStack.Elements)
+	for _, v := range g.VirtualStack.Elements {
 		switch v.Type {
 		case "int":
 			sizeBelow += 8
 		}
 
 		if v.Name == name {
-			return (i + 1) * sizeBelow
+			return sizeBelow
 		}
 	}
 	return -1
@@ -87,6 +88,17 @@ func (g *X64Generator) GetVTabVar(name string) codegen.VTabVar {
 		}
 	}
 	return codegen.VTabVar{}
+}
+
+func (g *X64Generator) GetVarStorageLoc(name string) (codegen.StorageLoc, error) {
+	tracer.Trace("GetVarStorageLoc")
+	defer tracer.Untrace("GetVarStorageLoc")
+	for k, v := range g.VirtualRegisters {
+		if v == name {
+			return k, nil
+		}
+	}
+	return codegen.RAX, fmt.Errorf("undefined variable: %s", name)
 }
 
 func (g *X64Generator) Generate() {
@@ -151,31 +163,37 @@ func (g *X64Generator) GenerateVarDef(v *ast.VarStatement) {
 	}
 }
 
-func (g *X64Generator) GenerateIdentifier(i *ast.Identifier) {
+func (g *X64Generator) GenerateIdentifier(i *ast.Identifier) codegen.StorageLoc {
 	tracer.Trace("GenerateIdentifier")
 	defer tracer.Untrace("GenerateIdentifier")
 
-	storageLoc, err := g.VariableStorageLocs[i.Value]
-	if err || storageLoc == codegen.Stack {
+	storageLoc, err := g.GetVarStorageLoc(i.Value)
+	if err != nil {
 		offset := g.GetVarStackOffset(i.Value)
 		if offset != -1 {
-			g.out.WriteString("movq " + fmt.Sprintf("-%d", offset) + "(%rbp), %rax\n")
+			return g.LoadIdentFromStack(i, offset)
 		} else {
 			g.e(i.Token, "undefined variable: "+i.Value)
 		}
-		g.VariableStorageLocs[i.Value] = codegen.RAX
-	} else {
-		switch storageLoc {
-		case codegen.RAX:
-			g.out.WriteString("%rax")
-		case codegen.RBX:
-			g.out.WriteString("%rbx")
-		case codegen.RCX:
-			g.out.WriteString("%rcx")
-		case codegen.RDX:
-			g.out.WriteString("%rdx")
+	}
+	return storageLoc
+}
+
+func (g *X64Generator) LoadIdentFromStack(i *ast.Identifier, offset int) codegen.StorageLoc {
+	tracer.Trace("LoadIdentFromStack")
+	defer tracer.Untrace("LoadIdentFromStack")
+	var reg codegen.StorageLoc
+	for _, v := range codegen.Sls {
+		_, ok := g.VirtualRegisters[v]
+		if !ok {
+			g.VirtualRegisters[v] = i.Value
+			fmt.Println(g.VirtualRegisters)
+			reg = v
+			break
 		}
 	}
+	g.out.WriteString("movq " + fmt.Sprintf("-%d", offset) + "(%rbp), " + codegen.StorageLocs[reg] + "\n")
+	return reg
 }
 
 func (g *X64Generator) GenerateCall(c *ast.CallExpression) {
@@ -210,20 +228,19 @@ func (g *X64Generator) GenerateInfix(node *ast.InfixExpression) {
 	tracer.Trace("GenerateInfix")
 	defer tracer.Untrace("GenerateInfix")
 	var rightS, leftS string
-	switch right := node.Right.(type) {
-	case *ast.Identifier:
-		g.GenerateIdentifier(right)
-		rightS = codegen.StorageLocs[g.VariableStorageLocs[right.Value]]
-	case *ast.IntegerLiteral:
-		rightS = "$" + fmt.Sprintf("%d", right.Value)
-	}
-
 	switch left := node.Left.(type) {
 	case *ast.Identifier:
 		g.GenerateIdentifier(left)
-		leftS = codegen.StorageLocs[g.VariableStorageLocs[left.Value]-1]
+		leftS = codegen.StorageLocs[g.GenerateIdentifier(left)]
 	case *ast.IntegerLiteral:
 		leftS = "$" + fmt.Sprintf("%d", left.Value)
+	}
+
+	switch right := node.Right.(type) {
+	case *ast.Identifier:
+		rightS = codegen.StorageLocs[g.GenerateIdentifier(right)]
+	case *ast.IntegerLiteral:
+		rightS = "$" + fmt.Sprintf("%d", right.Value)
 	}
 
 	switch node.Operator {
