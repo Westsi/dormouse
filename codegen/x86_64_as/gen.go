@@ -119,7 +119,7 @@ func (g *X64Generator) GenerateExpression(node ast.Expression) codegen.StorageLo
 	defer tracer.Untrace("GenerateExpression")
 	switch node := node.(type) {
 	case *ast.InfixExpression:
-		g.GenerateInfix(node)
+		return g.GenerateInfix(node)
 	case *ast.Identifier:
 		return g.GenerateIdentifier(node)
 	case *ast.IntegerLiteral:
@@ -158,6 +158,8 @@ func (g *X64Generator) GenerateFunction(f *ast.FunctionDefinition) {
 	// setup local stack for function
 	g.out.WriteString("pushq %rbp\n")      // save old base pointer to stack
 	g.out.WriteString("movq %rsp, %rbp\n") // use stack top pointer as base pointer for function
+	// move first param to rax
+	g.out.WriteString("movq %rdi, %rax\n")
 	g.GenerateBlock(f.Body)
 }
 
@@ -210,6 +212,7 @@ func (g *X64Generator) GenerateCall(c *ast.CallExpression) {
 	tracer.Trace("GenerateCall")
 	defer tracer.Untrace("GenerateCall")
 	for i, arg := range c.Arguments {
+		fmt.Printf("arg %d: %s\n", i, arg.String())
 		sloc := g.GenerateExpression(arg)
 		if sloc != codegen.NULLSTORAGE {
 			g.out.WriteString("movq " + codegen.StorageLocs[sloc] + ", " + codegen.StorageLocs[codegen.FNCallRegs[i]] + "\n")
@@ -250,11 +253,11 @@ func (g *X64Generator) GenerateLabel() string {
 	return fmt.Sprintf(".L%d", g.LabelCounter-1)
 }
 
-func (g *X64Generator) GenerateInfix(node *ast.InfixExpression) {
+func (g *X64Generator) GenerateInfix(node *ast.InfixExpression) codegen.StorageLoc {
 	tracer.Trace("GenerateInfix")
 	defer tracer.Untrace("GenerateInfix")
 
-	leftS, rightS := g.GetInfixOperands(node)
+	leftS, rightS, destLoc := g.GetInfixOperands(node)
 
 	switch node.Operator {
 	case "+":
@@ -266,19 +269,19 @@ func (g *X64Generator) GenerateInfix(node *ast.InfixExpression) {
 		// TODO: implement division
 	}
 	g.out.WriteString(rightS + ", " + leftS + "\n")
-
-	g.out.WriteString("\n")
+	return destLoc
 }
 
-func (g *X64Generator) GetInfixOperands(node *ast.InfixExpression) (string, string) {
+func (g *X64Generator) GetInfixOperands(node *ast.InfixExpression) (string, string, codegen.StorageLoc) {
 	tracer.Trace("GetInfixOperands")
 	defer tracer.Untrace("GetInfixOperands")
 	fmt.Println(node.Left)
 	var leftS, rightS string
+	var leftLoc codegen.StorageLoc
 	switch left := node.Left.(type) {
 	case *ast.Identifier:
-		g.GenerateIdentifier(left)
-		leftS = codegen.StorageLocs[g.GenerateIdentifier(left)]
+		leftLoc := g.GenerateIdentifier(left)
+		leftS = codegen.StorageLocs[leftLoc]
 	case *ast.IntegerLiteral:
 		leftS = "$" + fmt.Sprintf("%d", left.Value)
 	}
@@ -289,7 +292,7 @@ func (g *X64Generator) GetInfixOperands(node *ast.InfixExpression) (string, stri
 	case *ast.IntegerLiteral:
 		rightS = "$" + fmt.Sprintf("%d", right.Value)
 	}
-	return leftS, rightS
+	return leftS, rightS, leftLoc
 }
 
 func (g *X64Generator) GenerateIf(i *ast.IfExpression) {
@@ -298,7 +301,7 @@ func (g *X64Generator) GenerateIf(i *ast.IfExpression) {
 	// check if condition is true
 	// to do this, check what the comparative expr is and generate the corresponding jump instruction
 	separator := i.Condition.(*ast.InfixExpression).Operator
-	leftS, rightS := g.GetInfixOperands(i.Condition.(*ast.InfixExpression))
+	leftS, rightS, _ := g.GetInfixOperands(i.Condition.(*ast.InfixExpression))
 
 	// cmpl left, right
 	// jump to true case label
