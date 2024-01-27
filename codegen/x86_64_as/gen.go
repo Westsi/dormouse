@@ -59,7 +59,8 @@ func (g *X64Generator) Compile() {
 }
 
 func (g *X64Generator) e(tok lex.LexedTok, err string) {
-	panic(fmt.Sprintf("%v: %v - %s\n", tok.Pos, tok.Tok, err))
+	fmt.Printf("%v: %v - %s\n", tok.Pos, tok.Tok, err)
+	os.Exit(1)
 }
 
 func (g *X64Generator) GetVarStackOffset(name string) int {
@@ -155,14 +156,25 @@ func (g *X64Generator) GenerateBlock(b *ast.BlockStatement) {
 func (g *X64Generator) GenerateFunction(f *ast.FunctionDefinition) {
 	tracer.Trace("GenerateFunction")
 	defer tracer.Untrace("GenerateFunction")
+	// save old virtual stack but assume all registers other than rsp, rbp are clobbered
+	oldVirtStack := g.VirtualStack
+	g.VirtualStack = util.NewStack[codegen.VTabVar]()
+	g.VirtualRegisters = map[codegen.StorageLoc]string{}
+
 	g.out.WriteString(".type " + f.Name.Value + ", @function\n")
 	g.out.WriteString(f.Name.Value + ":\n")
 	// setup local stack for function
 	g.out.WriteString("pushq %rbp\n")      // save old base pointer to stack
 	g.out.WriteString("movq %rsp, %rbp\n") // use stack top pointer as base pointer for function
-	// move first param to rax
-	g.out.WriteString("movq %rdi, %rax\n")
+	// move params to stack and set virtual stack
+	for i, param := range f.Parameters {
+		g.out.WriteString("pushq " + codegen.StorageLocs[codegen.FNCallRegs[i]] + "\n")
+		g.VirtualStack.Push(codegen.VTabVar{Name: param.Name.Value, Type: param.Type.Value})
+	}
 	g.GenerateBlock(f.Body)
+	// restore old virtual stack
+	g.VirtualStack = oldVirtStack
+	g.VirtualRegisters = map[codegen.StorageLoc]string{}
 }
 
 func (g *X64Generator) GenerateVarDef(v *ast.VarStatement) {
@@ -258,7 +270,7 @@ func (g *X64Generator) GenerateLabel() string {
 func (g *X64Generator) GenerateInfix(node *ast.InfixExpression) codegen.StorageLoc {
 	tracer.Trace("GenerateInfix")
 	defer tracer.Untrace("GenerateInfix")
-
+	fmt.Println("infix", g.VirtualRegisters)
 	leftS, rightS, destLoc := g.GetInfixOperands(node)
 
 	switch node.Operator {
