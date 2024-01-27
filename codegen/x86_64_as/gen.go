@@ -100,7 +100,7 @@ func (g *X64Generator) GetVarStorageLoc(name string) (codegen.StorageLoc, error)
 			return k, nil
 		}
 	}
-	return codegen.RAX, fmt.Errorf("undefined variable: %s", name)
+	return codegen.NULLSTORAGE, fmt.Errorf("undefined variable: %s", name)
 }
 
 func (g *X64Generator) Generate() {
@@ -140,6 +140,8 @@ func (g *X64Generator) GenerateBlock(b *ast.BlockStatement) {
 			g.GenerateFunction(stmt)
 		case *ast.VarStatement:
 			g.GenerateVarDef(stmt)
+		case *ast.VarReassignmentStatement:
+			g.GenerateVarReassignment(stmt)
 		case *ast.ReturnStatement:
 			g.GenerateReturn(stmt)
 		case *ast.ExpressionStatement:
@@ -330,3 +332,19 @@ func (g *X64Generator) GenerateIf(i *ast.IfExpression) {
 	g.GenerateLabel()
 
 }
+
+func (g *X64Generator) GenerateVarReassignment(v *ast.VarReassignmentStatement) {
+	tracer.Trace("GenerateVarReassignment")
+	defer tracer.Untrace("GenerateVarReassignment")
+	// find the variable's location in the stack
+	offset := g.GetVarStackOffset(v.Name.Value)
+	// update it with the new value
+	g.out.WriteString("movq $" + fmt.Sprintf("%d", v.Value.(*ast.IntegerLiteral).Value) + ", " + fmt.Sprintf("-%d(%%rbp)", offset) + "\n")
+	// remove the old value from any registers
+	sloc, _ := g.GetVarStorageLoc(v.Name.Value)
+	if sloc != codegen.NULLSTORAGE {
+		g.out.WriteString("movq $0," + codegen.StorageLocs[sloc] + "\n")
+	}
+}
+
+// TODO: add support in parser and generator for variable reassignment e.g. x = x + 1 THEN implement while loops and then for loops

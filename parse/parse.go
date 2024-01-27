@@ -6,6 +6,7 @@ import (
 
 	"github.com/westsi/dormouse/ast"
 	"github.com/westsi/dormouse/lex"
+	"github.com/westsi/dormouse/tracer"
 )
 
 type Parser struct {
@@ -75,7 +76,7 @@ func (p *Parser) Errors() []string {
 }
 
 func (p *Parser) Parse() *ast.Program {
-	// defer untrace(trace("parse"))
+	defer tracer.Untrace(tracer.Trace("parse"))
 	program := &ast.Program{}
 	program.Statements = []ast.Statement{}
 
@@ -110,7 +111,7 @@ func (p *Parser) expectPeek(t lex.Token) bool {
 }
 
 func (p *Parser) parseStatement() ast.Statement {
-	// defer untrace(trace("parseStatement"))
+	defer tracer.Untrace(tracer.Trace("parseStatement"))
 	switch p.curTok.Tok {
 	case lex.RETURN:
 		return p.parseReturnStatement()
@@ -118,13 +119,15 @@ func (p *Parser) parseStatement() ast.Statement {
 		return nil
 	case lex.TYPE:
 		return p.parseTypeBeginStatement()
+	case lex.IDENT:
+		return p.parseVarReassignment(p.curTok)
 	default:
 		return p.parseExpressionStatement()
 	}
 }
 
 func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
-	// defer untrace(trace("parseExpressionStatement"))
+	defer tracer.Untrace(tracer.Trace("parseExpressionStatement"))
 	stmt := &ast.ExpressionStatement{Token: p.curTok}
 	stmt.Expression = p.parseExpression(LOWEST)
 	if p.peekTokenIs(lex.NEWLINE) {
@@ -134,7 +137,7 @@ func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
 }
 
 func (p *Parser) parseExpression(prec int) ast.Expression {
-	// defer untrace(trace("parseExpression"))
+	defer tracer.Untrace(tracer.Trace("parseExpression"))
 	prefix := p.prefixParseFuncs[p.curTok.Tok]
 	if prefix == nil {
 		p.noPrefixParseFuncError(p.curTok.Tok)
@@ -155,7 +158,7 @@ func (p *Parser) parseExpression(prec int) ast.Expression {
 }
 
 func (p *Parser) parseIntegerLiteral() ast.Expression {
-	// defer untrace(trace("parseIntegerLiteral"))
+	defer tracer.Untrace(tracer.Trace("parseIntegerLiteral"))
 	lit := &ast.IntegerLiteral{Token: p.curTok}
 	val, err := strconv.ParseInt(p.curTok.Val, 0, 64)
 	if err != nil {
@@ -166,7 +169,7 @@ func (p *Parser) parseIntegerLiteral() ast.Expression {
 }
 
 func (p *Parser) parsePrefixExpression() ast.Expression {
-	// defer untrace(trace("parsePrefixExpression"))
+	defer tracer.Untrace(tracer.Trace("parsePrefixExpression"))
 	exp := &ast.PrefixExpression{
 		Token:    p.curTok,
 		Operator: p.curTok.Val,
@@ -177,7 +180,7 @@ func (p *Parser) parsePrefixExpression() ast.Expression {
 }
 
 func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
-	// defer untrace(trace("parseInfixExpression"))
+	defer tracer.Untrace(tracer.Trace("parseInfixExpression"))
 	exp := &ast.InfixExpression{
 		Token:    p.curTok,
 		Operator: p.curTok.Val,
@@ -190,12 +193,12 @@ func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
 }
 
 func (p *Parser) parseBoolean() ast.Expression {
-	// defer untrace(trace("parseBoolean"))
+	defer tracer.Untrace(tracer.Trace("parseBoolean"))
 	return &ast.Boolean{Token: p.curTok, Value: p.curTokenIs(lex.TRUE)}
 }
 
 func (p *Parser) parseIfExpression() ast.Expression {
-	// defer untrace(trace("parseIfExpression"))
+	defer tracer.Untrace(tracer.Trace("parseIfExpression"))
 	exp := &ast.IfExpression{Token: p.curTok}
 
 	if !p.expectPeek(lex.LPAREN) {
@@ -224,7 +227,7 @@ func (p *Parser) parseIfExpression() ast.Expression {
 	return exp
 }
 func (p *Parser) parseBlockStatement() *ast.BlockStatement {
-	// defer untrace(trace("parseBlockStatement"))
+	defer tracer.Untrace(tracer.Trace("parseBlockStatement"))
 	block := &ast.BlockStatement{Token: p.curTok}
 	block.Statements = []ast.Statement{}
 	p.nextTok()
@@ -248,7 +251,7 @@ func (p *Parser) parseBlockStatement() *ast.BlockStatement {
 }
 
 func (p *Parser) parseFunctionParameters() []*ast.Parameter {
-	// defer untrace(trace("parseFunctionParameters"))
+	defer tracer.Untrace(tracer.Trace("parseFunctionParameters"))
 	parameters := []*ast.Parameter{}
 	if p.peekTokenIs(lex.RPAREN) {
 		p.nextTok()
@@ -291,7 +294,7 @@ func (p *Parser) parseFunctionParameters() []*ast.Parameter {
 }
 
 func (p *Parser) parseTypeBeginStatement() ast.Statement {
-	// defer untrace(trace("parseTypeBeginStatement"))
+	defer tracer.Untrace(tracer.Trace("parseTypeBeginStatement"))
 	// need to check if it is a variable or a function
 	startTok := p.curTok
 	p.nextTok()
@@ -308,7 +311,7 @@ func (p *Parser) parseTypeBeginStatement() ast.Statement {
 }
 
 func (p *Parser) parseVarStatement(startTok lex.LexedTok) *ast.VarStatement {
-	// defer untrace(trace("parseVarStatement"))
+	defer tracer.Untrace(tracer.Trace("parseVarStatement"))
 	stmt := &ast.VarStatement{Token: startTok}
 	stmt.Type = &ast.Type{Token: startTok, Value: startTok.Val}
 
@@ -328,8 +331,23 @@ func (p *Parser) parseVarStatement(startTok lex.LexedTok) *ast.VarStatement {
 	return stmt
 }
 
+func (p *Parser) parseVarReassignment(startTok lex.LexedTok) ast.Statement {
+	defer tracer.Untrace(tracer.Trace("parseVarReassignment"))
+	stmt := &ast.VarReassignmentStatement{Token: startTok}
+	stmt.Name = &ast.Identifier{Token: p.curTok, Value: p.curTok.Val}
+	if !p.expectPeek(lex.ASSIGN) {
+		p.e(lex.ASSIGN, p.curTok.Tok)
+	}
+	p.nextTok()
+	stmt.Value = p.parseExpressionStatement().Expression
+	if p.peekTokenIs(lex.NEWLINE) {
+		p.nextTok()
+	}
+	return stmt
+}
+
 func (p *Parser) parseFunctionDefinition(startTok lex.LexedTok) *ast.FunctionDefinition {
-	// defer untrace(trace("parseFunctionDefinition"))
+	defer tracer.Untrace(tracer.Trace("parseFunctionDefinition"))
 	fd := &ast.FunctionDefinition{Token: startTok, ReturnType: &ast.Type{Token: startTok, Value: startTok.Val}}
 	fd.Name = &ast.Identifier{Token: p.curTok, Value: p.curTok.Val}
 	if !p.expectPeek(lex.LPAREN) {
@@ -344,7 +362,7 @@ func (p *Parser) parseFunctionDefinition(startTok lex.LexedTok) *ast.FunctionDef
 }
 
 func (p *Parser) parseReturnStatement() *ast.ReturnStatement {
-	// defer untrace(trace("parseReturnStatement"))
+	defer tracer.Untrace(tracer.Trace("parseReturnStatement"))
 	stmt := &ast.ReturnStatement{Token: p.curTok}
 	p.nextTok()
 
@@ -357,19 +375,19 @@ func (p *Parser) parseReturnStatement() *ast.ReturnStatement {
 }
 
 func (p *Parser) parseIdentifier() ast.Expression {
-	// defer untrace(trace("parseIdentifier"))
+	defer tracer.Untrace(tracer.Trace("parseIdentifier"))
 	return &ast.Identifier{Token: p.curTok, Value: p.curTok.Val}
 }
 
 func (p *Parser) parseCallExpression(function ast.Expression) ast.Expression {
-	// defer untrace(trace("parseCallExpression"))
+	defer tracer.Untrace(tracer.Trace("parseCallExpression"))
 	exp := &ast.CallExpression{Token: p.curTok, Function: function}
 	exp.Arguments = p.parseCallArguments()
 	return exp
 }
 
 func (p *Parser) parseCallArguments() []ast.Expression {
-	// defer untrace(trace("parseCallArguments"))
+	defer tracer.Untrace(tracer.Trace("parseCallArguments"))
 	args := []ast.Expression{}
 	if p.peekTokenIs(lex.RPAREN) {
 		p.nextTok()

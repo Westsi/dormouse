@@ -1,10 +1,7 @@
 int main() {
     int x = 8
     int y = 5
+    y = 10
 
-    if (x > y) {
-        return x
-    } else {
-        return y
-    }
+    return x+y
 }

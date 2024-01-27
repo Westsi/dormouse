@@ -40,6 +40,21 @@ func (vs *VarStatement) String() string {
 	return fmt.Sprintf("(%s %s = %s)", vs.Type.String(), vs.Name.String(), vs.Value.String())
 }
 
+type VarReassignmentStatement struct {
+	Token lex.LexedTok
+	Name  *Identifier
+	Value Expression
+}
+
+func (vrs *VarReassignmentStatement) statementNode() {}
+func (vrs *VarReassignmentStatement) NType() string  { return "VarReassignmentStatement" }
+func (vrs *VarReassignmentStatement) Literal() string {
+	return fmt.Sprintf("token: %s, name: %s, value: %s\n", vrs.Token.Tok.String(), vrs.Name.Literal(), vrs.Value.Literal())
+}
+func (vrs *VarReassignmentStatement) String() string {
+	return fmt.Sprintf("(%s = %s)", vrs.Name.String(), vrs.Value.String())
+}
+
 type Identifier struct {
 	Token lex.LexedTok
 	Value string
