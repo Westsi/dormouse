@@ -185,6 +185,22 @@ func (i *IfExpression) String() string {
 	return fmt.Sprintf("(if %s %s)", i.Condition.String(), i.Consequence.String())
 }
 
+type WhileExpression struct {
+	Token     lex.LexedTok
+	Condition Expression
+	Body      *BlockStatement
+}
+
+func (w *WhileExpression) expressionNode() {}
+func (w *WhileExpression) statementNode()  {}
+func (w *WhileExpression) NType() string   { return "WhileExpression" }
+func (w *WhileExpression) Literal() string {
+	return fmt.Sprintf("token: %s, condition: %s, body: %s\n", w.Token.Tok.String(), w.Condition.Literal(), w.Body.Literal())
+}
+func (w *WhileExpression) String() string {
+	return fmt.Sprintf("(while %s %s)", w.Condition.String(), w.Body.String())
+}
+
 type BlockStatement struct {
 	Token      lex.LexedTok
 	Statements []Statement
@@ -245,7 +261,7 @@ func (p *Parameter) String() string {
 
 type CallExpression struct {
 	Token     lex.LexedTok
-	Function  Expression
+	Function  *Identifier
 	Arguments []Expression
 }
 

@@ -1,7 +1,9 @@
 int main() {
-    int x = 8
-    int y = 5
-    y = 10
+    int x = 11
+    x = plusone(x)
+    return x
+}
 
-    return x+y
+int plusone(int x) {
+    return x + 1
 }

@@ -45,7 +45,13 @@ func run(opts Options) {
 
 	p := parse.New(tokens)
 	ast := p.Parse()
-	fmt.Printf("Errors: %s\n", p.Errors())
+	fmt.Println("Errors:")
+	for _, err := range p.Errors() {
+		fmt.Println(err)
+	}
+	if len(p.Errors()) > 0 {
+		os.Exit(1)
+	}
 	fmt.Println(ast.String())
 
 	cg := x86_64_as.New(opts.OutFname, ast)

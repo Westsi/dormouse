@@ -209,6 +209,14 @@ func (g *X64Generator) LoadIdentFromStack(i *ast.Identifier, offset int) codegen
 func (g *X64Generator) GenerateCall(c *ast.CallExpression) {
 	tracer.Trace("GenerateCall")
 	defer tracer.Untrace("GenerateCall")
+	for i, arg := range c.Arguments {
+		sloc := g.GenerateExpression(arg)
+		if sloc != codegen.NULLSTORAGE {
+			g.out.WriteString("movq " + codegen.StorageLocs[sloc] + ", " + codegen.StorageLocs[codegen.FNCallRegs[i]] + "\n")
+		}
+	}
+	g.out.WriteString("call " + c.Function.Value + "\n")
+	// g.out.WriteString("addq $" + fmt.Sprintf("%d", len(c.Arguments)*8) + ", %rsp\n")
 }
 
 func (g *X64Generator) GenerateReturn(r *ast.ReturnStatement) {
@@ -339,12 +347,21 @@ func (g *X64Generator) GenerateVarReassignment(v *ast.VarReassignmentStatement) 
 	// find the variable's location in the stack
 	offset := g.GetVarStackOffset(v.Name.Value)
 	// update it with the new value
-	g.out.WriteString("movq $" + fmt.Sprintf("%d", v.Value.(*ast.IntegerLiteral).Value) + ", " + fmt.Sprintf("-%d(%%rbp)", offset) + "\n")
+	switch v.Value.(type) {
+	case *ast.IntegerLiteral:
+		g.out.WriteString("movq $" + fmt.Sprintf("%d", v.Value.(*ast.IntegerLiteral).Value) + ", " + fmt.Sprintf("-%d(%%rbp)", offset) + "\n")
+	case *ast.Identifier:
+		g.out.WriteString("movq " + codegen.StorageLocs[g.GenerateIdentifier(v.Value.(*ast.Identifier))] + ", " + fmt.Sprintf("-%d(%%rbp)", offset) + "\n")
+	case *ast.CallExpression:
+		g.GenerateCall(v.Value.(*ast.CallExpression))
+		g.out.WriteString("movq " + "%rax" + ", " + fmt.Sprintf("-%d(%%rbp)", offset) + "\n")
+	}
 	// remove the old value from any registers
 	sloc, _ := g.GetVarStorageLoc(v.Name.Value)
 	if sloc != codegen.NULLSTORAGE {
-		g.out.WriteString("movq $0," + codegen.StorageLocs[sloc] + "\n")
+		g.out.WriteString("movq $0, " + codegen.StorageLocs[sloc] + "\n")
+		delete(g.VirtualRegisters, sloc)
 	}
 }
 
-// TODO: add support in parser and generator for variable reassignment e.g. x = x + 1 THEN implement while loops and then for loops
+// TODO: add support in parser and generator for while loops and then for loops

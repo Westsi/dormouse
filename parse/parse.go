@@ -34,6 +34,7 @@ func (p *Parser) registerInfix(tokenType lex.Token, fn infixParseFunc) {
 }
 func (p *Parser) noPrefixParseFuncError(t lex.Token) {
 	p.errors = append(p.errors, fmt.Sprintf("no prefix parse function for %s found", t))
+	fmt.Printf("Errored at %s:%s\n", p.curTok.Pos.String(), p.curTok.Tok.String())
 }
 
 func New(tokens []lex.LexedTok) *Parser {
@@ -50,6 +51,7 @@ func New(tokens []lex.LexedTok) *Parser {
 	p.registerPrefix(lex.TRUE, p.parseBoolean)
 	p.registerPrefix(lex.FALSE, p.parseBoolean)
 	p.registerPrefix(lex.IF, p.parseIfExpression)
+	p.registerPrefix(lex.WHILE, p.parseWhileExpression)
 	// p.registerPrefix(lex.FUNC, p.parseFunctionDefinition)
 	// p.registerPrefix(lex.EFUNC, p.parseEntrypointFunctionDefinition)
 	p.infixParseFuncs = make(map[lex.Token]infixParseFunc)
@@ -93,6 +95,7 @@ func (p *Parser) Parse() *ast.Program {
 
 func (p *Parser) e(expected, actual lex.Token) {
 	p.errors = append(p.errors, fmt.Sprintf("expected %s, got %s", expected, actual))
+	fmt.Printf("Errored at %s:%s\n", p.curTok.Pos.String(), p.curTok.Tok.String())
 }
 
 func (p *Parser) curTokenIs(t lex.Token) bool {
@@ -226,6 +229,25 @@ func (p *Parser) parseIfExpression() ast.Expression {
 
 	return exp
 }
+
+func (p *Parser) parseWhileExpression() ast.Expression {
+	defer tracer.Untrace(tracer.Trace("parseWhileExpression"))
+	w := &ast.WhileExpression{Token: p.curTok}
+	if !p.expectPeek(lex.LPAREN) {
+		return nil
+	}
+	p.nextTok()
+	w.Condition = p.parseExpression(LOWEST)
+	if !p.expectPeek(lex.RPAREN) {
+		return nil
+	}
+	if !p.expectPeek(lex.BLOCKSTART) {
+		return nil
+	}
+	w.Body = p.parseBlockStatement()
+	return w
+}
+
 func (p *Parser) parseBlockStatement() *ast.BlockStatement {
 	defer tracer.Untrace(tracer.Trace("parseBlockStatement"))
 	block := &ast.BlockStatement{Token: p.curTok}
@@ -242,8 +264,9 @@ func (p *Parser) parseBlockStatement() *ast.BlockStatement {
 		}
 		p.nextTok()
 		if p.curTokenIs(lex.NEWLINE) { // blockend was consumed here because it was p.peekTokenIs which ignored the advance on line 243
-			p.nextTok()
-			p.nextTok()
+			for p.curTokenIs(lex.NEWLINE) {
+				p.nextTok()
+			}
 		}
 		canCont = !p.curTokenIs(lex.BLOCKEND) && !p.curTokenIs(lex.EOF)
 	}
@@ -381,7 +404,7 @@ func (p *Parser) parseIdentifier() ast.Expression {
 
 func (p *Parser) parseCallExpression(function ast.Expression) ast.Expression {
 	defer tracer.Untrace(tracer.Trace("parseCallExpression"))
-	exp := &ast.CallExpression{Token: p.curTok, Function: function}
+	exp := &ast.CallExpression{Token: p.curTok, Function: function.(*ast.Identifier)}
 	exp.Arguments = p.parseCallArguments()
 	return exp
 }
