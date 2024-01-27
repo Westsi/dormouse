@@ -1,17 +1,17 @@
 int main() {
-    int x = 3
+    int x = 8
     int i = 0
     while (i < 4) {
-        x = x + 3
+        x = plus(x)
         i = i + 1
     }
     return x
 }
 
-// int plus(int x) {
-//     if (x > 10) {
-//         return x * 2
-//     } else {
-//         return x + 1
-//     }
-// }
+int plus(int x) {
+    if (x > 10) {
+        return x * 2
+    } else {
+        return x + 1
+    }
+}
