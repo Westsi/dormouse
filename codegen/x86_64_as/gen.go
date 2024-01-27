@@ -126,6 +126,8 @@ func (g *X64Generator) GenerateExpression(node ast.Expression) codegen.StorageLo
 		g.out.WriteString("movq $" + fmt.Sprintf("%d", node.Value) + ", %rax\n") //TODO: give this same treatment as the identifier case - picking regs
 	case *ast.IfExpression:
 		g.GenerateIf(node)
+	case *ast.WhileExpression:
+		g.GenerateWhileLoop(node)
 	}
 	return codegen.NULLSTORAGE
 }
@@ -358,6 +360,9 @@ func (g *X64Generator) GenerateVarReassignment(v *ast.VarReassignmentStatement) 
 	case *ast.CallExpression:
 		g.GenerateCall(v.Value.(*ast.CallExpression))
 		g.out.WriteString("movq " + "%rax" + ", " + fmt.Sprintf("-%d(%%rbp)", offset) + "\n")
+	case *ast.InfixExpression:
+		g.GenerateInfix(v.Value.(*ast.InfixExpression))
+		g.out.WriteString("movq " + "%rax" + ", " + fmt.Sprintf("-%d(%%rbp)", offset) + "\n")
 	}
 	// remove the old value from any registers
 	sloc, _ := g.GetVarStorageLoc(v.Name.Value)
@@ -365,6 +370,50 @@ func (g *X64Generator) GenerateVarReassignment(v *ast.VarReassignmentStatement) 
 		g.out.WriteString("movq $0, " + codegen.StorageLocs[sloc] + "\n")
 		delete(g.VirtualRegisters, sloc)
 	}
+}
+
+func (g *X64Generator) GenerateWhileLoop(w *ast.WhileExpression) {
+	tracer.Trace("GenerateWhileLoop")
+	defer tracer.Untrace("GenerateWhileLoop")
+	// generate jump to condition check
+	// generate body
+	// generate condition check
+	// e.g.
+	// jmp .L1
+	// .L2:
+	// ...
+	// .L1:
+	// cmpq $2, %rax
+	// jle .L2
+	// ...
+
+	predictedBodyLabel := fmt.Sprintf(".L%d", g.LabelCounter)
+	predictedConditionLabel := fmt.Sprintf(".L%d", g.LabelCounter+1)
+
+	g.out.WriteString("jmp " + predictedConditionLabel + "\n")
+
+	g.GenerateLabel()
+	g.GenerateBlock(w.Body)
+
+	g.GenerateLabel()
+	separator := w.Condition.(*ast.InfixExpression).Operator
+	leftS, rightS, _ := g.GetInfixOperands(w.Condition.(*ast.InfixExpression))
+	g.out.WriteString("cmpq " + rightS + ", " + leftS + "\n")
+	switch separator {
+	case "==":
+		g.out.WriteString("je " + predictedBodyLabel + "\n")
+	case "!=":
+		g.out.WriteString("jne " + predictedBodyLabel + "\n")
+	case "<":
+		g.out.WriteString("jl " + predictedBodyLabel + "\n")
+	case ">":
+		g.out.WriteString("jg " + predictedBodyLabel + "\n")
+	case "<=":
+		g.out.WriteString("jle " + predictedBodyLabel + "\n")
+	case ">=":
+		g.out.WriteString("jge " + predictedBodyLabel + "\n")
+	}
+
 }
 
 // TODO: add support in parser and generator for while loops and then for loops
