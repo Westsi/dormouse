@@ -33,6 +33,10 @@ func NewLexer(reader *os.File) *Lexer {
 	}
 }
 
+func (l *Lexer) GetRdrFname() string {
+	return l.rdr.Name()
+}
+
 func (l *Lexer) Lex() ([]LexedTok, []string) {
 	var tokens []LexedTok
 	var imported []string

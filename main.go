@@ -3,7 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/westsi/dormouse/codegen/x86_64_as"
@@ -34,18 +36,40 @@ func main() {
 func run(opts Options) {
 	tracer.InitTrace(opts.Debug)
 
-	var tokens []lex.LexedTok
 	lexers, _ := ResolveImports([]string{}, opts.BaseDir, opts.Fname)
+	var asmNames []string
 
 	for _, lexer := range lexers {
-		t, _ := lexer.Lex()
-		tokens = append(tokens, t...)
+		asmNames = append(asmNames, strings.Split((strings.Split(lexer.GetRdrFname(), "/")[len(strings.Split(lexer.GetRdrFname(), "/"))-1]), ".")[0]+".s")
+		fmt.Println("Compiling", lexer.GetRdrFname())
+		Compile(lexer)
+	}
+	CompileAll(opts, asmNames)
+}
+
+func CompileAll(opts Options, fnames []string) {
+	outf, _ := os.Create("out/x86_64/asm/___concat.s")
+	for _, fname := range fnames {
+		rdr, err := os.Open("out/x86_64/asm/" + fname)
+		if err != nil {
+			panic(err)
+		}
+		defer rdr.Close()
+		_, err = io.Copy(outf, rdr)
+		if err != nil {
+			panic(err)
+		}
 	}
 
-	for _, tok := range tokens {
-		fmt.Println(tok.String())
+	out, err := exec.Command("gcc", "-o"+"out/x86_64/"+strings.Split(opts.Fname, ".")[0], "out/x86_64/asm/___concat.s").Output()
+	if err != nil {
+		print(string(out))
 	}
+}
 
+func Compile(lexer *lex.Lexer) {
+	tokens, _ := lexer.Lex()
+	fname := strings.Split((strings.Split(lexer.GetRdrFname(), "/")[len(strings.Split(lexer.GetRdrFname(), "/"))-1]), ".")[0]
 	p := parse.New(tokens)
 	ast := p.Parse()
 	fmt.Println("Errors:")
@@ -57,10 +81,10 @@ func run(opts Options) {
 	}
 	fmt.Println(ast.String())
 
-	cg := x86_64_as.New(opts.OutFname, ast)
+	cg := x86_64_as.New(fname+".s", ast)
 	cg.Generate()
 	cg.Write()
-	cg.Compile()
+
 }
 
 func ResolveImports(prevImps []string, baseDir, imp string) ([]*lex.Lexer, []string) {
@@ -93,6 +117,6 @@ type Options struct {
 	Verbose  bool
 	Debug    bool
 	Fname    string
-	OutFname string
 	BaseDir  string
+	OutFname string
 }

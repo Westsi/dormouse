@@ -3,7 +3,6 @@ package x86_64_as
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/westsi/dormouse/ast"
@@ -33,7 +32,6 @@ func New(fpath string, ast *ast.Program) *X64Generator {
 		VirtualRegisters: map[codegen.StorageLoc]string{},
 		LabelCounter:     0,
 	}
-	generator.out.WriteString(".text\n.globl main\n")
 	os.MkdirAll("out/x86_64", os.ModePerm)
 	os.MkdirAll("out/x86_64/asm", os.ModePerm)
 	return generator
@@ -48,13 +46,6 @@ func (g *X64Generator) Write() {
 	_, err = f.WriteString(g.out.String())
 	if err != nil {
 		panic(err)
-	}
-}
-
-func (g *X64Generator) Compile() {
-	out, err := exec.Command("gcc", "-o"+"out/x86_64/"+strings.Split(g.fpath, ".")[0], "out/x86_64/asm/"+g.fpath).Output()
-	if err != nil {
-		print(string(out))
 	}
 }
 
@@ -159,6 +150,10 @@ func (g *X64Generator) GenerateFunction(f *ast.FunctionDefinition) {
 	oldVirtStack := g.VirtualStack
 	g.VirtualStack = util.NewStack[codegen.VTabVar]()
 	g.VirtualRegisters = map[codegen.StorageLoc]string{}
+
+	if f.Name.Value == "main" {
+		g.out.WriteString(".text\n.globl main\n")
+	}
 
 	g.out.WriteString(".type " + f.Name.Value + ", @function\n")
 	g.out.WriteString(f.Name.Value + ":\n")
