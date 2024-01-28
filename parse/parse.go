@@ -245,7 +245,6 @@ func (p *Parser) parseWhileExpression() ast.Expression {
 		return nil
 	}
 	w.Body = p.parseBlockStatement()
-	fmt.Println(w)
 	return w
 }
 
