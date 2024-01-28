@@ -294,7 +294,8 @@ func (g *X64Generator) GetInfixOperands(node *ast.InfixExpression) (string, stri
 	var leftLoc codegen.StorageLoc
 	switch left := node.Left.(type) {
 	case *ast.Identifier:
-		leftLoc := g.GenerateIdentifier(left)
+		leftLoc = g.GenerateIdentifier(left)
+		fmt.Println(leftLoc)
 		leftS = codegen.StorageLocs[leftLoc]
 	case *ast.IntegerLiteral:
 		leftS = "$" + fmt.Sprintf("%d", left.Value)
@@ -373,8 +374,8 @@ func (g *X64Generator) GenerateVarReassignment(v *ast.VarReassignmentStatement) 
 		g.GenerateCall(v.Value.(*ast.CallExpression))
 		g.out.WriteString("movq " + "%rax" + ", " + fmt.Sprintf("-%d(%%rbp)", offset) + "\n")
 	case *ast.InfixExpression:
-		g.GenerateInfix(v.Value.(*ast.InfixExpression))
-		g.out.WriteString("movq " + "%rax" + ", " + fmt.Sprintf("-%d(%%rbp)", offset) + "\n")
+		sloc := g.GenerateInfix(v.Value.(*ast.InfixExpression))
+		g.out.WriteString("movq " + codegen.StorageLocs[sloc] + ", " + fmt.Sprintf("-%d(%%rbp)", offset) + "\n")
 	}
 	// remove the old value from any registers
 	sloc, _ := g.GetVarStorageLoc(v.Name.Value)
