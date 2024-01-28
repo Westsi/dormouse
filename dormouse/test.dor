@@ -1,17 +1,11 @@
+@import "other"
+
 int main() {
-    int x = 8
+    int x = 4 + 2 * 2
     int i = 0
     while (i < 4) {
         x = plus(x, i)
         i = i + 1
     }
     return x
-}
-
-int plus(int x, int y) {
-    if (x > y) {
-        return x * 2
-    } else {
-        return x + 1
-    }
 }

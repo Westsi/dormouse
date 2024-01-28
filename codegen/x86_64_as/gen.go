@@ -68,7 +68,6 @@ func (g *X64Generator) GetVarStackOffset(name string) int {
 	defer tracer.Untrace("GetVarStackOffset")
 	// get offset from bottom of stack in terms of indices and multiply by sizes to get bits
 	sizeBelow := 0
-	fmt.Println(g.VirtualStack.Elements)
 	for _, v := range g.VirtualStack.Elements {
 		switch v.Type {
 		case "int":
@@ -213,7 +212,6 @@ func (g *X64Generator) LoadIdentFromStack(i *ast.Identifier, offset int) codegen
 		_, ok := g.VirtualRegisters[v]
 		if !ok {
 			g.VirtualRegisters[v] = i.Value
-			fmt.Println(g.VirtualRegisters)
 			reg = v
 			break
 		}
@@ -226,7 +224,6 @@ func (g *X64Generator) GenerateCall(c *ast.CallExpression) {
 	tracer.Trace("GenerateCall")
 	defer tracer.Untrace("GenerateCall")
 	for i, arg := range c.Arguments {
-		fmt.Printf("arg %d: %s\n", i, arg.String())
 		sloc := g.GenerateExpression(arg)
 		if sloc != codegen.NULLSTORAGE {
 			g.out.WriteString("movq " + codegen.StorageLocs[sloc] + ", " + codegen.StorageLocs[codegen.FNCallRegs[i]] + "\n")
@@ -240,7 +237,6 @@ func (g *X64Generator) GenerateReturn(r *ast.ReturnStatement) {
 	tracer.Trace("GenerateReturn")
 	defer tracer.Untrace("GenerateReturn")
 	// clean up stack
-	fmt.Printf("returning %s\n", r.ReturnValue.String())
 	sloc := g.GenerateExpression(r.ReturnValue)
 	if sloc != codegen.NULLSTORAGE && sloc != codegen.RAX {
 		g.out.WriteString("movq " + codegen.StorageLocs[sloc] + ", %rax\n")
@@ -270,7 +266,6 @@ func (g *X64Generator) GenerateLabel() string {
 func (g *X64Generator) GenerateInfix(node *ast.InfixExpression) codegen.StorageLoc {
 	tracer.Trace("GenerateInfix")
 	defer tracer.Untrace("GenerateInfix")
-	fmt.Println("infix", g.VirtualRegisters)
 	leftS, rightS, destLoc := g.GetInfixOperands(node)
 
 	switch node.Operator {
@@ -289,13 +284,11 @@ func (g *X64Generator) GenerateInfix(node *ast.InfixExpression) codegen.StorageL
 func (g *X64Generator) GetInfixOperands(node *ast.InfixExpression) (string, string, codegen.StorageLoc) {
 	tracer.Trace("GetInfixOperands")
 	defer tracer.Untrace("GetInfixOperands")
-	fmt.Println(node.Left)
 	var leftS, rightS string
 	var leftLoc codegen.StorageLoc
 	switch left := node.Left.(type) {
 	case *ast.Identifier:
 		leftLoc = g.GenerateIdentifier(left)
-		fmt.Println(leftLoc)
 		leftS = codegen.StorageLocs[leftLoc]
 	case *ast.IntegerLiteral:
 		leftS = "$" + fmt.Sprintf("%d", left.Value)

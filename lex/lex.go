@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"os"
 	"unicode"
 )
 
@@ -11,31 +12,44 @@ type Position struct {
 	fmt.Stringer
 	line int
 	col  int
+	file string
 }
 
 func (p Position) String() string {
-	return fmt.Sprintf("Line %d, Col %d", p.line, p.col)
+	return fmt.Sprintf("File %s, Line %d, Col %d", p.file, p.line, p.col)
 }
 
 type Lexer struct {
 	pos    Position
 	reader *bufio.Reader
+	rdr    *os.File
 }
 
-func NewLexer(reader io.Reader) *Lexer {
+func NewLexer(reader *os.File) *Lexer {
 	return &Lexer{
 		reader: bufio.NewReader(reader),
-		pos:    Position{line: 1, col: 0},
+		rdr:    reader,
+		pos:    Position{line: 1, col: 0, file: reader.Name()},
 	}
 }
 
-func (l *Lexer) Lex() []LexedTok {
+func (l *Lexer) Lex() ([]LexedTok, []string) {
 	var tokens []LexedTok
+	var imported []string
+	l.rdr.Seek(0, io.SeekStart)
+	l.reader = bufio.NewReader(l.rdr)
+	l.pos.col = 0
+	l.pos.line = 1
 	for {
 		pos, tok, val := l.LexChar()
+		if tok == IMPORT {
+			pos, tok, val = l.LexChar()
+			imported = append(imported, val)
+			continue
+		}
 		tokens = append(tokens, NewLexedTok(pos, tok, val))
 		if tok == EOF {
-			return tokens
+			return tokens, imported
 		}
 	}
 }
