@@ -19,9 +19,35 @@ type X64Generator struct {
 	out              strings.Builder
 	AST              ast.Program
 	VirtualStack     *util.Stack[codegen.VTabVar]
-	VirtualRegisters map[codegen.StorageLoc]string
+	VirtualRegisters map[StorageLoc]string
 	LabelCounter     int
 }
+
+type StorageLoc int
+
+const (
+	// Stack StorageLoc = iota
+	RAX StorageLoc = iota
+	RCX
+	RDX
+	RDI
+	RSI
+	R8
+	R9
+	R10
+	R11
+	R12
+	R13
+	R14
+	R15
+	NULLSTORAGE
+)
+
+var Sls = []StorageLoc{RAX, RCX, RDX, RDI, RSI, R8, R9, R10, R11, R12, R13, R14, R15}
+
+var StorageLocs = []string{"%rax", "%rcx", "%rdx", "%rdi", "%rsi", "%r8", "%r9", "%r10", "%r11", "%r12", "%r13", "%r14", "%r15"}
+
+var FNCallRegs = []StorageLoc{RDI, RSI, RDX, RCX, R8, R9}
 
 func New(fpath string, ast *ast.Program) *X64Generator {
 	generator := &X64Generator{
@@ -29,7 +55,7 @@ func New(fpath string, ast *ast.Program) *X64Generator {
 		out:              strings.Builder{},
 		AST:              *ast,
 		VirtualStack:     util.NewStack[codegen.VTabVar](),
-		VirtualRegisters: map[codegen.StorageLoc]string{},
+		VirtualRegisters: map[StorageLoc]string{},
 		LabelCounter:     0,
 	}
 	os.MkdirAll("out/x86_64", os.ModePerm)
@@ -83,7 +109,7 @@ func (g *X64Generator) GetVTabVar(name string) codegen.VTabVar {
 	return codegen.VTabVar{}
 }
 
-func (g *X64Generator) GetVarStorageLoc(name string) (codegen.StorageLoc, error) {
+func (g *X64Generator) GetVarStorageLoc(name string) (StorageLoc, error) {
 	tracer.Trace("GetVarStorageLoc")
 	defer tracer.Untrace("GetVarStorageLoc")
 	for k, v := range g.VirtualRegisters {
@@ -91,7 +117,7 @@ func (g *X64Generator) GetVarStorageLoc(name string) (codegen.StorageLoc, error)
 			return k, nil
 		}
 	}
-	return codegen.NULLSTORAGE, fmt.Errorf("undefined variable: %s", name)
+	return NULLSTORAGE, fmt.Errorf("undefined variable: %s", name)
 }
 
 func (g *X64Generator) Generate() {
@@ -105,7 +131,7 @@ func (g *X64Generator) Generate() {
 	}
 }
 
-func (g *X64Generator) GenerateExpression(node ast.Expression) codegen.StorageLoc {
+func (g *X64Generator) GenerateExpression(node ast.Expression) StorageLoc {
 	tracer.Trace("GenerateExpression")
 	defer tracer.Untrace("GenerateExpression")
 	switch node := node.(type) {
@@ -120,7 +146,7 @@ func (g *X64Generator) GenerateExpression(node ast.Expression) codegen.StorageLo
 	case *ast.WhileExpression:
 		g.GenerateWhileLoop(node)
 	}
-	return codegen.NULLSTORAGE
+	return NULLSTORAGE
 }
 
 func (g *X64Generator) GenerateBlock(b *ast.BlockStatement) {
@@ -149,7 +175,7 @@ func (g *X64Generator) GenerateFunction(f *ast.FunctionDefinition) {
 	// save old virtual stack but assume all registers other than rsp, rbp are clobbered
 	oldVirtStack := g.VirtualStack
 	g.VirtualStack = util.NewStack[codegen.VTabVar]()
-	g.VirtualRegisters = map[codegen.StorageLoc]string{}
+	g.VirtualRegisters = map[StorageLoc]string{}
 
 	if f.Name.Value == "main" {
 		g.out.WriteString(".text\n.globl main\n")
@@ -162,13 +188,13 @@ func (g *X64Generator) GenerateFunction(f *ast.FunctionDefinition) {
 	g.out.WriteString("movq %rsp, %rbp\n") // use stack top pointer as base pointer for function
 	// move params to stack and set virtual stack
 	for i, param := range f.Parameters {
-		g.out.WriteString("pushq " + codegen.StorageLocs[codegen.FNCallRegs[i]] + "\n")
+		g.out.WriteString("pushq " + StorageLocs[FNCallRegs[i]] + "\n")
 		g.VirtualStack.Push(codegen.VTabVar{Name: param.Name.Value, Type: param.Type.Value})
 	}
 	g.GenerateBlock(f.Body)
 	// restore old virtual stack
 	g.VirtualStack = oldVirtStack
-	g.VirtualRegisters = map[codegen.StorageLoc]string{}
+	g.VirtualRegisters = map[StorageLoc]string{}
 }
 
 func (g *X64Generator) GenerateVarDef(v *ast.VarStatement) {
@@ -183,7 +209,7 @@ func (g *X64Generator) GenerateVarDef(v *ast.VarStatement) {
 	}
 }
 
-func (g *X64Generator) GenerateIdentifier(i *ast.Identifier) codegen.StorageLoc {
+func (g *X64Generator) GenerateIdentifier(i *ast.Identifier) StorageLoc {
 	tracer.Trace("GenerateIdentifier")
 	defer tracer.Untrace("GenerateIdentifier")
 
@@ -199,11 +225,11 @@ func (g *X64Generator) GenerateIdentifier(i *ast.Identifier) codegen.StorageLoc 
 	return storageLoc
 }
 
-func (g *X64Generator) LoadIdentFromStack(i *ast.Identifier, offset int) codegen.StorageLoc {
+func (g *X64Generator) LoadIdentFromStack(i *ast.Identifier, offset int) StorageLoc {
 	tracer.Trace("LoadIdentFromStack")
 	defer tracer.Untrace("LoadIdentFromStack")
-	var reg codegen.StorageLoc
-	for _, v := range codegen.Sls {
+	var reg StorageLoc
+	for _, v := range Sls {
 		_, ok := g.VirtualRegisters[v]
 		if !ok {
 			g.VirtualRegisters[v] = i.Value
@@ -211,7 +237,7 @@ func (g *X64Generator) LoadIdentFromStack(i *ast.Identifier, offset int) codegen
 			break
 		}
 	}
-	g.out.WriteString("movq " + fmt.Sprintf("-%d", offset) + "(%rbp), " + codegen.StorageLocs[reg] + "\n")
+	g.out.WriteString("movq " + fmt.Sprintf("-%d", offset) + "(%rbp), " + StorageLocs[reg] + "\n")
 	return reg
 }
 
@@ -220,8 +246,8 @@ func (g *X64Generator) GenerateCall(c *ast.CallExpression) {
 	defer tracer.Untrace("GenerateCall")
 	for i, arg := range c.Arguments {
 		sloc := g.GenerateExpression(arg)
-		if sloc != codegen.NULLSTORAGE {
-			g.out.WriteString("movq " + codegen.StorageLocs[sloc] + ", " + codegen.StorageLocs[codegen.FNCallRegs[i]] + "\n")
+		if sloc != NULLSTORAGE {
+			g.out.WriteString("movq " + StorageLocs[sloc] + ", " + StorageLocs[FNCallRegs[i]] + "\n")
 		}
 	}
 	g.out.WriteString("call " + c.Function.Value + "\n")
@@ -233,8 +259,8 @@ func (g *X64Generator) GenerateReturn(r *ast.ReturnStatement) {
 	defer tracer.Untrace("GenerateReturn")
 	// clean up stack
 	sloc := g.GenerateExpression(r.ReturnValue)
-	if sloc != codegen.NULLSTORAGE && sloc != codegen.RAX {
-		g.out.WriteString("movq " + codegen.StorageLocs[sloc] + ", %rax\n")
+	if sloc != NULLSTORAGE && sloc != RAX {
+		g.out.WriteString("movq " + StorageLocs[sloc] + ", %rax\n")
 	}
 	g.out.WriteString("movq %rbp, %rsp\n")
 	g.out.WriteString("popq %rbp\n")
@@ -258,7 +284,7 @@ func (g *X64Generator) GenerateLabel() string {
 	return fmt.Sprintf(".L%d", g.LabelCounter-1)
 }
 
-func (g *X64Generator) GenerateInfix(node *ast.InfixExpression) codegen.StorageLoc {
+func (g *X64Generator) GenerateInfix(node *ast.InfixExpression) StorageLoc {
 	tracer.Trace("GenerateInfix")
 	defer tracer.Untrace("GenerateInfix")
 	leftS, rightS, destLoc := g.GetInfixOperands(node)
@@ -276,22 +302,22 @@ func (g *X64Generator) GenerateInfix(node *ast.InfixExpression) codegen.StorageL
 	return destLoc
 }
 
-func (g *X64Generator) GetInfixOperands(node *ast.InfixExpression) (string, string, codegen.StorageLoc) {
+func (g *X64Generator) GetInfixOperands(node *ast.InfixExpression) (string, string, StorageLoc) {
 	tracer.Trace("GetInfixOperands")
 	defer tracer.Untrace("GetInfixOperands")
 	var leftS, rightS string
-	var leftLoc codegen.StorageLoc
+	var leftLoc StorageLoc
 	switch left := node.Left.(type) {
 	case *ast.Identifier:
 		leftLoc = g.GenerateIdentifier(left)
-		leftS = codegen.StorageLocs[leftLoc]
+		leftS = StorageLocs[leftLoc]
 	case *ast.IntegerLiteral:
 		leftS = "$" + fmt.Sprintf("%d", left.Value)
 	}
 
 	switch right := node.Right.(type) {
 	case *ast.Identifier:
-		rightS = codegen.StorageLocs[g.GenerateIdentifier(right)]
+		rightS = StorageLocs[g.GenerateIdentifier(right)]
 	case *ast.IntegerLiteral:
 		rightS = "$" + fmt.Sprintf("%d", right.Value)
 	}
@@ -357,18 +383,18 @@ func (g *X64Generator) GenerateVarReassignment(v *ast.VarReassignmentStatement) 
 	case *ast.IntegerLiteral:
 		g.out.WriteString("movq $" + fmt.Sprintf("%d", v.Value.(*ast.IntegerLiteral).Value) + ", " + fmt.Sprintf("-%d(%%rbp)", offset) + "\n")
 	case *ast.Identifier:
-		g.out.WriteString("movq " + codegen.StorageLocs[g.GenerateIdentifier(v.Value.(*ast.Identifier))] + ", " + fmt.Sprintf("-%d(%%rbp)", offset) + "\n")
+		g.out.WriteString("movq " + StorageLocs[g.GenerateIdentifier(v.Value.(*ast.Identifier))] + ", " + fmt.Sprintf("-%d(%%rbp)", offset) + "\n")
 	case *ast.CallExpression:
 		g.GenerateCall(v.Value.(*ast.CallExpression))
 		g.out.WriteString("movq " + "%rax" + ", " + fmt.Sprintf("-%d(%%rbp)", offset) + "\n")
 	case *ast.InfixExpression:
 		sloc := g.GenerateInfix(v.Value.(*ast.InfixExpression))
-		g.out.WriteString("movq " + codegen.StorageLocs[sloc] + ", " + fmt.Sprintf("-%d(%%rbp)", offset) + "\n")
+		g.out.WriteString("movq " + StorageLocs[sloc] + ", " + fmt.Sprintf("-%d(%%rbp)", offset) + "\n")
 	}
 	// remove the old value from any registers
 	sloc, _ := g.GetVarStorageLoc(v.Name.Value)
-	if sloc != codegen.NULLSTORAGE {
-		g.out.WriteString("movq $0, " + codegen.StorageLocs[sloc] + "\n")
+	if sloc != NULLSTORAGE {
+		g.out.WriteString("movq $0, " + StorageLocs[sloc] + "\n")
 		delete(g.VirtualRegisters, sloc)
 	}
 }
