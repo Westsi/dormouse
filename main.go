@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/westsi/dormouse/codegen"
+	"github.com/westsi/dormouse/codegen/aarch64_clang"
 	"github.com/westsi/dormouse/codegen/x86_64_as"
 	"github.com/westsi/dormouse/lex"
 	"github.com/westsi/dormouse/parse"
@@ -19,10 +21,12 @@ func main() {
 	isVerbose := flag.Bool("v", false, "verbose")
 	isDebug := flag.Bool("d", false, "debug")
 	OutFname := flag.String("o", "", "output file name")
+	targetArch := flag.String("a", "x86_64", "target architecture")
 	flag.Parse()
 	opts.Verbose = *isVerbose
 	opts.Debug = *isDebug
 	opts.OutFname = *OutFname
+	opts.TargetArch = *targetArch
 	opts.Fname = flag.Arg(0)
 	if opts.OutFname == "" {
 		opts.OutFname = strings.Split(strings.Split(opts.Fname, ".")[0], "/")[len(strings.Split(opts.Fname, "/"))-1] + ".s"
@@ -42,15 +46,15 @@ func run(opts Options) {
 	for _, lexer := range lexers {
 		asmNames = append(asmNames, strings.Split((strings.Split(lexer.GetRdrFname(), "/")[len(strings.Split(lexer.GetRdrFname(), "/"))-1]), ".")[0]+".s")
 		fmt.Println("Compiling", lexer.GetRdrFname())
-		Compile(lexer)
+		Compile(&opts, lexer)
 	}
 	CompileAll(opts, asmNames)
 }
 
 func CompileAll(opts Options, fnames []string) {
-	outf, _ := os.Create("out/x86_64/asm/___concat.s")
+	outf, _ := os.Create("out/" + opts.TargetArch + "/asm/___concat.s")
 	for _, fname := range fnames {
-		rdr, err := os.Open("out/x86_64/asm/" + fname)
+		rdr, err := os.Open("out/" + opts.TargetArch + "/asm/" + fname)
 		if err != nil {
 			panic(err)
 		}
@@ -61,13 +65,13 @@ func CompileAll(opts Options, fnames []string) {
 		}
 	}
 
-	out, err := exec.Command("gcc", "-o"+"out/x86_64/"+strings.Split(opts.Fname, ".")[0], "out/x86_64/asm/___concat.s").Output()
+	out, err := exec.Command("gcc", "-o"+"out/"+opts.TargetArch+"/"+strings.Split(opts.Fname, ".")[0], "out/"+opts.TargetArch+"/asm/___concat.s").Output()
 	if err != nil {
 		print(string(out))
 	}
 }
 
-func Compile(lexer *lex.Lexer) {
+func Compile(opts *Options, lexer *lex.Lexer) {
 	tokens, _ := lexer.Lex()
 	fname := strings.Split((strings.Split(lexer.GetRdrFname(), "/")[len(strings.Split(lexer.GetRdrFname(), "/"))-1]), ".")[0]
 	p := parse.New(tokens)
@@ -80,8 +84,13 @@ func Compile(lexer *lex.Lexer) {
 		os.Exit(1)
 	}
 	fmt.Println(ast.String())
-
-	cg := x86_64_as.New(fname+".s", ast)
+	var cg codegen.CodeGenerator
+	switch opts.TargetArch {
+	case "x86_64":
+		cg = x86_64_as.New(fname+".s", ast)
+	case "aarch64":
+		cg = aarch64_clang.New(fname+".s", ast)
+	}
 	cg.Generate()
 	cg.Write()
 
@@ -114,9 +123,10 @@ func ResolveImports(prevImps []string, baseDir, imp string) ([]*lex.Lexer, []str
 }
 
 type Options struct {
-	Verbose  bool
-	Debug    bool
-	Fname    string
-	BaseDir  string
-	OutFname string
+	Verbose    bool
+	Debug      bool
+	Fname      string
+	BaseDir    string
+	OutFname   string
+	TargetArch string
 }

@@ -1,6 +1,7 @@
 package aarch64_clang
 
 import (
+	"os"
 	"strings"
 
 	"github.com/westsi/dormouse/ast"
@@ -68,3 +69,23 @@ var FNCallRegs = []StorageLoc{}
 // x30 - link register
 // pc - program counter
 // https://johannst.github.io/notes/arch/arm64.html
+
+func New(fpath string, ast *ast.Program) *AARCH64Generator {
+	generator := &AARCH64Generator{
+		fpath:            fpath,
+		out:              strings.Builder{},
+		AST:              *ast,
+		VirtualStack:     util.NewStack[codegen.VTabVar](),
+		VirtualRegisters: map[StorageLoc]string{},
+		LabelCounter:     0,
+	}
+	os.MkdirAll("out/aarch64", os.ModePerm)
+	os.MkdirAll("out/aarch64/asm", os.ModePerm)
+	return generator
+}
+
+func (g *AARCH64Generator) Generate() {
+}
+
+func (g *AARCH64Generator) Write() {
+}
