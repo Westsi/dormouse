@@ -1,7 +1,7 @@
 package codegen
 
 type CodeGenerator interface {
-	Generate()
+	Generate() int
 	Write()
 }
 

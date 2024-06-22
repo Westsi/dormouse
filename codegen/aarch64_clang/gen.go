@@ -18,6 +18,7 @@ type AARCH64Generator struct {
 	VirtualStack     *util.Stack[codegen.VTabVar]
 	VirtualRegisters map[StorageLoc]string
 	LabelCounter     int
+	Gdefs            map[string]string
 }
 
 type StorageLoc int
@@ -70,21 +71,23 @@ var FNCallRegs = []StorageLoc{}
 // pc - program counter
 // https://johannst.github.io/notes/arch/arm64.html
 
-func New(fpath string, ast *ast.Program) *AARCH64Generator {
+func New(fpath string, ast *ast.Program, defs map[string]string, lc int) *AARCH64Generator {
 	generator := &AARCH64Generator{
 		fpath:            fpath,
 		out:              strings.Builder{},
 		AST:              *ast,
 		VirtualStack:     util.NewStack[codegen.VTabVar](),
 		VirtualRegisters: map[StorageLoc]string{},
-		LabelCounter:     0,
+		LabelCounter:     lc,
+		Gdefs:            defs,
 	}
 	os.MkdirAll("out/aarch64", os.ModePerm)
 	os.MkdirAll("out/aarch64/asm", os.ModePerm)
 	return generator
 }
 
-func (g *AARCH64Generator) Generate() {
+func (g *AARCH64Generator) Generate() int {
+	return g.LabelCounter
 }
 
 func (g *AARCH64Generator) Write() {

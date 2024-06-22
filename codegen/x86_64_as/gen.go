@@ -51,14 +51,14 @@ var StorageLocs = []string{"%rax", "%rcx", "%rdx", "%rdi", "%rsi", "%r8", "%r9",
 
 var FNCallRegs = []StorageLoc{RDI, RSI, RDX, RCX, R8, R9}
 
-func New(fpath string, ast *ast.Program, defs map[string]string) *X64Generator {
+func New(fpath string, ast *ast.Program, defs map[string]string, lc int) *X64Generator {
 	generator := &X64Generator{
 		fpath:            fpath,
 		out:              strings.Builder{},
 		AST:              *ast,
 		VirtualStack:     util.NewStack[codegen.VTabVar](),
 		VirtualRegisters: map[StorageLoc]string{},
-		LabelCounter:     0,
+		LabelCounter:     lc,
 		Gdefs:            defs,
 	}
 	os.MkdirAll("out/x86_64", os.ModePerm)
@@ -128,7 +128,7 @@ func (g *X64Generator) GetVarStorageLoc(name string) (StorageLoc, error) {
 	return NULLSTORAGE, fmt.Errorf("undefined variable: %s", name)
 }
 
-func (g *X64Generator) Generate() {
+func (g *X64Generator) Generate() int {
 	tracer.Trace("Generate")
 	defer tracer.Untrace("Generate")
 	for _, stmt := range g.AST.Statements {
@@ -137,6 +137,7 @@ func (g *X64Generator) Generate() {
 			g.GenerateFunction(stmt)
 		}
 	}
+	return g.LabelCounter
 }
 
 func (g *X64Generator) GenerateExpression(node ast.Expression) StorageLoc {

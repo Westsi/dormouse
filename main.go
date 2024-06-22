@@ -17,6 +17,7 @@ import (
 )
 
 var globalDefines = make(map[string]string)
+var labelcnt int = 0
 
 func main() {
 	opts := Options{}
@@ -89,11 +90,11 @@ func Compile(opts *Options, lexer *lex.Lexer) {
 	var cg codegen.CodeGenerator
 	switch opts.TargetArch {
 	case "x86_64":
-		cg = x86_64_as.New(fname+".s", ast, globalDefines)
+		cg = x86_64_as.New(fname+".s", ast, globalDefines, labelcnt)
 	case "aarch64":
-		cg = aarch64_clang.New(fname+".s", ast)
+		cg = aarch64_clang.New(fname+".s", ast, globalDefines, labelcnt)
 	}
-	cg.Generate()
+	labelcnt = cg.Generate()
 	cg.Write()
 
 }

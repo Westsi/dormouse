@@ -3,7 +3,7 @@
 @define FOUR 4
 
 int main() {
-    int x = FOUR + 2 * 2
+    int x = 4 + 2 * 2
     int i = 0
     while (i < 4) {
         x = plus(x, i)
