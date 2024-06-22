@@ -16,6 +16,8 @@ import (
 	"github.com/westsi/dormouse/tracer"
 )
 
+var globalDefines = make(map[string]string)
+
 func main() {
 	opts := Options{}
 	isVerbose := flag.Bool("v", false, "verbose")
@@ -72,7 +74,7 @@ func CompileAll(opts Options, fnames []string) {
 }
 
 func Compile(opts *Options, lexer *lex.Lexer) {
-	tokens, _ := lexer.Lex()
+	tokens, _, _ := lexer.Lex()
 	fname := strings.Split((strings.Split(lexer.GetRdrFname(), "/")[len(strings.Split(lexer.GetRdrFname(), "/"))-1]), ".")[0]
 	p := parse.New(tokens)
 	ast := p.Parse()
@@ -87,7 +89,7 @@ func Compile(opts *Options, lexer *lex.Lexer) {
 	var cg codegen.CodeGenerator
 	switch opts.TargetArch {
 	case "x86_64":
-		cg = x86_64_as.New(fname+".s", ast)
+		cg = x86_64_as.New(fname+".s", ast, globalDefines)
 	case "aarch64":
 		cg = aarch64_clang.New(fname+".s", ast)
 	}
@@ -111,7 +113,14 @@ func ResolveImports(prevImps []string, baseDir, imp string) ([]*lex.Lexer, []str
 
 	lexer := lex.NewLexer(reader)
 	lexers = append(lexers, lexer)
-	_, imported := lexer.Lex()
+	_, imported, defined := lexer.Lex()
+	for k, v := range defined {
+		if val, ok := globalDefines[k]; ok {
+			// define already exists, warn of overwriting but allow it
+			fmt.Printf("WARNING: %s has already been @defined as %s. It is being overwritten.", k, val)
+		}
+		globalDefines[k] = v
+	}
 	fmt.Println("Imported:", imported)
 	prevImps = append(prevImps, imp)
 	for _, imp := range imported {

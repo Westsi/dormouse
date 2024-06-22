@@ -37,9 +37,10 @@ func (l *Lexer) GetRdrFname() string {
 	return l.rdr.Name()
 }
 
-func (l *Lexer) Lex() ([]LexedTok, []string) {
+func (l *Lexer) Lex() ([]LexedTok, []string, map[string]string) {
 	var tokens []LexedTok
 	var imported []string
+	defined := make(map[string]string)
 	l.rdr.Seek(0, io.SeekStart)
 	l.reader = bufio.NewReader(l.rdr)
 	l.pos.col = 0
@@ -50,10 +51,20 @@ func (l *Lexer) Lex() ([]LexedTok, []string) {
 			pos, tok, val = l.LexChar()
 			imported = append(imported, val)
 			continue
+		} else if tok == DEFINE {
+			// @define HELLO 3
+			// p, t, v of HELLO
+			_, _, name := l.LexChar()
+			// TODO: adapt so that stuff like "@define FILE" works as in C - FILE is set to 1
+			// p, t, v, of 3
+			_, _, sub := l.LexChar()
+			defined[name] = sub
+
+			continue
 		}
 		tokens = append(tokens, NewLexedTok(pos, tok, val))
 		if tok == EOF {
-			return tokens, imported
+			return tokens, imported, defined
 		}
 	}
 }
@@ -115,6 +126,8 @@ func (l *Lexer) LexChar() (Position, Token, string) {
 			lit := l.lexCompilerInstruction()
 			if lit == "@import" {
 				return startPos, IMPORT, lit
+			} else if lit == "@define" {
+				return startPos, DEFINE, lit
 			} else {
 				return startPos, ILLEGAL, lit
 			}

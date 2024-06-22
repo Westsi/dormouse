@@ -21,6 +21,7 @@ type X64Generator struct {
 	VirtualStack     *util.Stack[codegen.VTabVar]
 	VirtualRegisters map[StorageLoc]string
 	LabelCounter     int
+	Gdefs            map[string]string
 }
 
 type StorageLoc int
@@ -41,6 +42,7 @@ const (
 	R14
 	R15
 	NULLSTORAGE
+	DEFINES
 )
 
 var Sls = []StorageLoc{RAX, RCX, RDX, RDI, RSI, R8, R9, R10, R11, R12, R13, R14, R15}
@@ -49,7 +51,7 @@ var StorageLocs = []string{"%rax", "%rcx", "%rdx", "%rdi", "%rsi", "%r8", "%r9",
 
 var FNCallRegs = []StorageLoc{RDI, RSI, RDX, RCX, R8, R9}
 
-func New(fpath string, ast *ast.Program) *X64Generator {
+func New(fpath string, ast *ast.Program, defs map[string]string) *X64Generator {
 	generator := &X64Generator{
 		fpath:            fpath,
 		out:              strings.Builder{},
@@ -57,6 +59,7 @@ func New(fpath string, ast *ast.Program) *X64Generator {
 		VirtualStack:     util.NewStack[codegen.VTabVar](),
 		VirtualRegisters: map[StorageLoc]string{},
 		LabelCounter:     0,
+		Gdefs:            defs,
 	}
 	os.MkdirAll("out/x86_64", os.ModePerm)
 	os.MkdirAll("out/x86_64/asm", os.ModePerm)
@@ -115,6 +118,11 @@ func (g *X64Generator) GetVarStorageLoc(name string) (StorageLoc, error) {
 	for k, v := range g.VirtualRegisters {
 		if v == name {
 			return k, nil
+		}
+	}
+	for k := range g.Gdefs {
+		if k == name {
+			return DEFINES, nil
 		}
 	}
 	return NULLSTORAGE, fmt.Errorf("undefined variable: %s", name)
@@ -214,6 +222,14 @@ func (g *X64Generator) GenerateIdentifier(i *ast.Identifier) StorageLoc {
 	defer tracer.Untrace("GenerateIdentifier")
 
 	storageLoc, err := g.GetVarStorageLoc(i.Value)
+	if storageLoc == DEFINES {
+		for k, v := range g.Gdefs {
+			if i.Value == k {
+				g.out.WriteString(v)
+			}
+		}
+	}
+
 	if err != nil {
 		offset := g.GetVarStackOffset(i.Value)
 		if offset != -1 {
