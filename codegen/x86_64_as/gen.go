@@ -98,6 +98,17 @@ func (g *X64Generator) GetVarStackOffset(name string) int {
 			return sizeBelow
 		}
 	}
+
+	// for i := g.VirtualStack.Size() - 1; i >= 0; i-- {
+	// 	v := g.VirtualStack.Elements[i]
+	// 	switch v.Type {
+	// 	case "int":
+	// 		sizeBelow += 8
+	// 	}
+	// 	if v.Name == name {
+	// 		return sizeBelow
+	// 	}
+	// }
 	return -1
 }
 
@@ -150,6 +161,7 @@ func (g *X64Generator) GenerateExpression(node ast.Expression) StorageLoc {
 		return g.GenerateIdentifier(node)
 	case *ast.IntegerLiteral:
 		g.out.WriteString("movq $" + fmt.Sprintf("%d", node.Value) + ", %rax\n") //TODO: give this same treatment as the identifier case - picking regs
+		return RAX
 	case *ast.IfExpression:
 		g.GenerateIf(node)
 	case *ast.WhileExpression:
@@ -207,14 +219,22 @@ func (g *X64Generator) GenerateFunction(f *ast.FunctionDefinition) {
 }
 
 func (g *X64Generator) GenerateVarDef(v *ast.VarStatement) {
+	// TODO: massive changes needed here!!!
 	tracer.Trace("GenerateVarDef")
 	defer tracer.Untrace("GenerateVarDef")
+	fmt.Printf("%T\n", v.Value.(*ast.ExpressionStatement).Expression)
+	sloc := g.GenerateExpression(v.Value.(*ast.ExpressionStatement).Expression)
+	if sloc == NULLSTORAGE {
+		fmt.Println("\033[31mPROBLEM PANICCCCCCC\033[0m")
+	}
 	// TODO: make this work with more than a simple int literal e.g. infix ops
 	g.VirtualStack.Push(codegen.VTabVar{Name: v.Name.Value, Type: v.Type.Value})
+
 	switch v.Type.Value {
 	case "int":
 		// TODO: this only works with infix ops in the def because of gcc optimizations afaik.
-		g.out.WriteString("pushq $" + v.Value.String() + "\n") // load value into stack
+		// g.out.WriteString("pushq $" + v.Value.String() + "\n") // load value into stack
+		g.out.WriteString("pushq " + StorageLocs[sloc] + "\n")
 	}
 }
 
@@ -226,6 +246,7 @@ func (g *X64Generator) GenerateIdentifier(i *ast.Identifier) StorageLoc {
 	if storageLoc == DEFINES {
 		for k, v := range g.Gdefs {
 			if i.Value == k {
+				// TODO: figure out how to test this!
 				g.out.WriteString(v)
 			}
 		}
@@ -268,6 +289,10 @@ func (g *X64Generator) GenerateCall(c *ast.CallExpression) {
 		}
 	}
 	g.out.WriteString("call " + c.Function.Value + "\n")
+	for sl := range g.VirtualRegisters {
+		delete(g.VirtualRegisters, sl)
+	}
+
 	// g.out.WriteString("addq $" + fmt.Sprintf("%d", len(c.Arguments)*8) + ", %rsp\n")
 }
 
@@ -328,8 +353,19 @@ func (g *X64Generator) GetInfixOperands(node *ast.InfixExpression) (string, stri
 	case *ast.Identifier:
 		leftLoc = g.GenerateIdentifier(left)
 		leftS = StorageLocs[leftLoc]
+		fmt.Println(leftS)
 	case *ast.IntegerLiteral:
-		leftS = "$" + fmt.Sprintf("%d", left.Value)
+		// leftS = "$" + fmt.Sprintf("%d", left.Value)
+		for _, v := range Sls {
+			_, ok := g.VirtualRegisters[v]
+			if !ok {
+				g.VirtualRegisters[v] = "TEMP"
+				leftLoc = v
+				break
+			}
+		}
+		leftS = StorageLocs[leftLoc]
+		g.out.WriteString("movq $" + fmt.Sprintf("%d", left.Value) + ", " + leftS + "\n")
 	}
 
 	switch right := node.Right.(type) {
@@ -337,6 +373,8 @@ func (g *X64Generator) GetInfixOperands(node *ast.InfixExpression) (string, stri
 		rightS = StorageLocs[g.GenerateIdentifier(right)]
 	case *ast.IntegerLiteral:
 		rightS = "$" + fmt.Sprintf("%d", right.Value)
+	case *ast.InfixExpression:
+		rightS = StorageLocs[g.GenerateInfix(right)]
 	}
 	return leftS, rightS, leftLoc
 }
@@ -391,6 +429,7 @@ func (g *X64Generator) GenerateIf(i *ast.IfExpression) {
 }
 
 func (g *X64Generator) GenerateVarReassignment(v *ast.VarReassignmentStatement) {
+	// TODO: this may need a bit of rewriting
 	tracer.Trace("GenerateVarReassignment")
 	defer tracer.Untrace("GenerateVarReassignment")
 	// find the variable's location in the stack
