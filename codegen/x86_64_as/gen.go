@@ -47,7 +47,7 @@ const (
 
 var Sls = []StorageLoc{RAX, RCX, RDX, R8, R9, R10, R11, R12, R13, R14, R15}
 
-var StorageLocs = []string{"%rax", "%rcx", "%rdx", "%r8", "%r9", "%r10", "%r11", "%r12", "%r13", "%r14", "%r15"}
+var StorageLocs = []string{"%rax", "%rcx", "%rdx", "%rdi", "%rsi", "%r8", "%r9", "%r10", "%r11", "%r12", "%r13", "%r14", "%r15"}
 
 var FNCallRegs = []StorageLoc{RDI, RSI, RDX, RCX, R8, R9}
 
@@ -247,7 +247,17 @@ func (g *X64Generator) GenerateIdentifier(i *ast.Identifier) StorageLoc {
 		for k, v := range g.Gdefs {
 			if i.Value == k {
 				// TODO: figure out how to test this!
-				g.out.WriteString(v)
+				var reg StorageLoc
+				for _, s := range Sls {
+					_, ok := g.VirtualRegisters[s]
+					if !ok {
+						g.VirtualRegisters[s] = i.Value
+						reg = s
+						break
+					}
+				}
+				g.out.WriteString("movq $" + v + ", " + StorageLocs[reg] + "\n")
+				return reg
 			}
 		}
 	}
