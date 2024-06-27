@@ -246,7 +246,6 @@ func (g *X64Generator) GenerateIdentifier(i *ast.Identifier) StorageLoc {
 	if storageLoc == DEFINES {
 		for k, v := range g.Gdefs {
 			if i.Value == k {
-				// TODO: figure out how to test this!
 				var reg StorageLoc
 				for _, s := range Sls {
 					_, ok := g.VirtualRegisters[s]
