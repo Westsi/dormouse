@@ -423,6 +423,8 @@ func (g *AARCH64Generator) GenerateIf(i *ast.IfExpression) {
 	g.GenerateLabel()
 }
 
+// TODO: nested ifs!!
+
 func (g *AARCH64Generator) GenerateVarReassignment(v *ast.VarReassignmentStatement) {
 	tracer.Trace("GenerateVarReassignment")
 	defer tracer.Untrace("GenerateVarReassignment")
