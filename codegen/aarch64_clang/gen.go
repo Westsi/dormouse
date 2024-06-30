@@ -18,7 +18,7 @@ type AARCH64Generator struct {
 	fpath            string
 	out              strings.Builder
 	AST              ast.Program
-	VirtualStack     *util.Stack[codegen.VTabVar]
+	VirtualStack     *util.Armstack[codegen.VTabVar]
 	VirtualRegisters map[StorageLoc]string
 	LabelCounter     int
 	Gdefs            map[string]string
@@ -65,7 +65,7 @@ var Sls = []StorageLoc{X0, X1, X2, X3, X4, X5, X6, X7, X8, X9, X10, X11, X12, X1
 
 var StorageLocs = []string{"x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17", "x18", "x19", "x20", "x21", "x22", "x23", "x24", "x25", "x26", "x27", "x28"}
 
-var FNCallRegs = []StorageLoc{} // i think this is just storage locations from x0 ascending
+var FNCallRegs = []StorageLoc{X0, X1, X2, X3, X4, X5, X6, X7} // i think this is just storage locations from x0 ascending
 
 // TODO: change registers from x86_64 to aarch64
 // I THINK:
@@ -80,7 +80,7 @@ func New(fpath string, ast *ast.Program, defs map[string]string, lc int) *AARCH6
 		fpath:            fpath,
 		out:              strings.Builder{},
 		AST:              *ast,
-		VirtualStack:     util.NewStack[codegen.VTabVar](),
+		VirtualStack:     util.NewAStack[codegen.VTabVar](32),
 		VirtualRegisters: map[StorageLoc]string{},
 		LabelCounter:     lc,
 		Gdefs:            defs,
@@ -121,7 +121,7 @@ func (g *AARCH64Generator) Write() {
 func (g *AARCH64Generator) GenerateFunction(f *ast.FunctionDefinition) {
 	defer tracer.Untrace(tracer.Trace("GenerateFunction"))
 	oldVirtStack := g.VirtualStack
-	g.VirtualStack = util.NewStack[codegen.VTabVar]()
+	g.VirtualStack = util.NewAStack[codegen.VTabVar](32)
 	g.VirtualRegisters = map[StorageLoc]string{}
 
 	if f.Name.Value == "main" {
@@ -131,7 +131,7 @@ func (g *AARCH64Generator) GenerateFunction(f *ast.FunctionDefinition) {
 	g.out.WriteString("_" + f.Name.Value + ":\n")
 
 	// setup default local stack - TODO: figure out size of stack necessary
-	g.out.WriteString("sub sp, sp, #16\n")
+	g.out.WriteString("sub sp, sp, #32\n")
 	// TODO: does storing wzr need to go here?
 	// TODO: implement passing parameters
 	g.GenerateBlock(f.Body)
@@ -143,14 +143,15 @@ func (g *AARCH64Generator) GenerateFunction(f *ast.FunctionDefinition) {
 func (g *AARCH64Generator) GenerateExpression(node ast.Expression) StorageLoc {
 	defer tracer.Untrace(tracer.Trace("GenerateExpression"))
 	switch node := node.(type) {
-	// case *ast.InfixExpression:
-	// 	return g.GenerateInfix(node)
+	case *ast.InfixExpression:
+		return g.GenerateInfix(node)
 	case *ast.Identifier:
 		return g.GenerateIdentifier(node)
 	case *ast.IntegerLiteral:
-		g.out.WriteString("mov w0, " + fmt.Sprintf("%d", node.Value) + "\n") //TODO: give this same treatment as the identifier case - picking regs
-		// case *ast.IfExpression:
-		// 	g.GenerateIf(node)
+		g.out.WriteString("mov x0, " + fmt.Sprintf("%d", node.Value) + "\n") //TODO: give this same treatment as the identifier case - picking regs
+		return X0
+	case *ast.IfExpression:
+		g.GenerateIf(node)
 		// case *ast.WhileExpression:
 		// 	g.GenerateWhileLoop(node)
 	}
@@ -166,8 +167,8 @@ func (g *AARCH64Generator) GenerateBlock(b *ast.BlockStatement) {
 			g.GenerateFunction(stmt)
 		case *ast.VarStatement:
 			g.GenerateVarDef(stmt)
-		// case *ast.VarReassignmentStatement:
-		// 	g.GenerateVarReassignment(stmt)
+		case *ast.VarReassignmentStatement:
+			g.GenerateVarReassignment(stmt)
 		case *ast.ReturnStatement:
 			g.GenerateReturn(stmt)
 		case *ast.ExpressionStatement:
@@ -181,9 +182,9 @@ func (g *AARCH64Generator) GenerateReturn(r *ast.ReturnStatement) {
 	// clean up stack
 	sloc := g.GenerateExpression(r.ReturnValue)
 	if sloc != NULLSTORAGE && sloc != X0 {
-		g.out.WriteString("mov" + "x0" + StorageLocs[sloc] + "\n")
+		g.out.WriteString("mov " + "x0, " + StorageLocs[sloc] + "\n")
 	}
-	g.out.WriteString("add sp, sp, #16\n")
+	g.out.WriteString("add sp, sp, #32\n")
 	g.out.WriteString("ret\n")
 }
 
@@ -259,4 +260,202 @@ func (g *AARCH64Generator) LoadIdentFromStack(i *ast.Identifier, offset int) Sto
 	}
 	g.out.WriteString("ldr " + StorageLocs[reg] + ", [sp, " + fmt.Sprintf("#%d", offset) + "]\n")
 	return reg
+}
+
+func (g *AARCH64Generator) GetNextEmptyStackLoc() int {
+	for i := 8; i < g.VirtualStack.Size(); i += 8 {
+		if (g.VirtualStack.Get(i) == codegen.VTabVar{}) {
+			return i
+		}
+	}
+	fmt.Println("Stack full!")
+	os.Exit(1)
+	return -1
+}
+
+func (g *AARCH64Generator) GenerateVarDef(v *ast.VarStatement) {
+	tracer.Trace("GenerateVarDef")
+	defer tracer.Untrace("GenerateVarDef")
+	fmt.Printf("%T\n", v.Value.(*ast.ExpressionStatement).Expression)
+	sloc := g.GenerateExpression(v.Value.(*ast.ExpressionStatement).Expression)
+	if sloc == NULLSTORAGE {
+		fmt.Println("\033[31mPROBLEM PANICCCCCCC\033[0m")
+	}
+
+	stackloc := g.GetNextEmptyStackLoc()
+	g.VirtualStack.Set(codegen.VTabVar{Name: v.Name.Value, Type: v.Type.Value}, stackloc)
+
+	switch v.Type.Value {
+	case "int":
+		g.out.WriteString("str " + StorageLocs[sloc] + ", [sp, #" + fmt.Sprintf("%d", stackloc) + "]\n")
+	}
+}
+
+func (g *AARCH64Generator) GenerateInfix(node *ast.InfixExpression) StorageLoc {
+	tracer.Trace("GenerateInfix")
+	defer tracer.Untrace("GenerateInfix")
+	leftS, rightS, destLoc := g.GetInfixOperands(node)
+
+	switch node.Operator {
+	case "+":
+		g.out.WriteString("add ")
+	case "-":
+		g.out.WriteString("sub ")
+	case "*":
+		g.out.WriteString("imul ") // this needs some other stuff - only works with registers no ints
+		// TODO: implement division
+	}
+	g.out.WriteString(StorageLocs[destLoc] + ", " + leftS + ", " + rightS + "\n")
+	return destLoc
+}
+
+func (g *AARCH64Generator) GetInfixOperands(node *ast.InfixExpression) (string, string, StorageLoc) {
+	tracer.Trace("GetInfixOperands")
+	defer tracer.Untrace("GetInfixOperands")
+	var leftS, rightS string
+	var destLoc StorageLoc
+	switch left := node.Left.(type) {
+	case *ast.Identifier:
+		leftS = StorageLocs[g.GenerateIdentifier(left)]
+		fmt.Println(leftS)
+	case *ast.InfixExpression:
+		leftS = StorageLocs[g.GenerateInfix(left)]
+	case *ast.IntegerLiteral:
+		// leftS = "$" + fmt.Sprintf("%d", left.Value)
+		var sloc StorageLoc
+		for _, v := range Sls {
+			_, ok := g.VirtualRegisters[v]
+			if !ok {
+				g.VirtualRegisters[v] = "TEMP"
+				sloc = v
+				break
+			}
+		}
+		leftS = StorageLocs[sloc]
+		g.out.WriteString("mov " + leftS + ", " + fmt.Sprintf("%d", left.Value) + "\n")
+	}
+
+	switch right := node.Right.(type) {
+	case *ast.Identifier:
+		rightS = StorageLocs[g.GenerateIdentifier(right)]
+	case *ast.IntegerLiteral:
+		rightS = "#" + fmt.Sprintf("%d", right.Value)
+	case *ast.InfixExpression:
+		rightS = StorageLocs[g.GenerateInfix(right)]
+	}
+
+	for _, v := range Sls {
+		_, ok := g.VirtualRegisters[v]
+		if !ok {
+			g.VirtualRegisters[v] = "TEMP"
+			destLoc = v
+			break
+		}
+	}
+	return leftS, rightS, destLoc
+}
+
+func (g *AARCH64Generator) GenerateLabel() string {
+	tracer.Trace("GenerateLabel")
+	defer tracer.Untrace("GenerateLabel")
+	g.out.WriteString(fmt.Sprintf("LBB%d:\n", g.LabelCounter))
+	g.LabelCounter++
+	return fmt.Sprintf("LBB%d", g.LabelCounter-1)
+}
+
+func (g *AARCH64Generator) GenerateIf(i *ast.IfExpression) {
+	tracer.Trace("GenerateIf")
+	defer tracer.Untrace("GenerateIf")
+	// check if condition is true
+	// to do this, check what the comparative expr is and generate the corresponding jump instruction
+	separator := i.Condition.(*ast.InfixExpression).Operator
+	leftS, rightS, _ := g.GetInfixOperands(i.Condition.(*ast.InfixExpression))
+
+	// cmp reg, val
+	// cset reg, operator
+	// tbnz reg, bit number, true label
+	// jump to false case label
+	// true case code
+	// jump to end of true case section
+
+	// e.g.
+	// cmp x8, #2
+	// cset x8, gt		; set x8 to 1 if flags show le
+	// tbnz x8, #0, LBB1; if bit #0 of reg x8 is not zero (hence is true), jump to LBB1
+	// b LBB2
+	// LBB1:
+	// mov x9, #0
+	// b LBB3
+	// LBB2:
+	// mov x9, #5
+	// b LBB3
+	// LBB3:
+	// ...
+
+	predictedTrueLabel := fmt.Sprintf("LBB%d", g.LabelCounter)
+	predictedFalseLabel := fmt.Sprintf("LBB%d", g.LabelCounter+1)
+	predictedEndLabel := fmt.Sprintf("LBB%d", g.LabelCounter+2)
+
+	g.out.WriteString("cmp " + leftS + ", " + rightS + "\n")
+	g.out.WriteString("cset x8, ")
+	switch separator {
+	case "==":
+		g.out.WriteString("eq\n")
+	case "!=":
+		g.out.WriteString("ne\n")
+	case "<":
+		g.out.WriteString("lt\n")
+	case ">":
+		g.out.WriteString("gt\n")
+	case "<=":
+		g.out.WriteString("le\n")
+	case ">=":
+		g.out.WriteString("ge\n")
+	}
+	g.out.WriteString("tbnz x8, #0, " + predictedTrueLabel + "\n")
+	g.out.WriteString("b " + predictedFalseLabel + "\n")
+	g.GenerateLabel()
+	g.GenerateBlock(i.Consequence)
+	g.out.WriteString("b " + predictedEndLabel + "\n")
+	g.GenerateLabel()
+	g.GenerateBlock(i.Alternative)
+	g.out.WriteString("b " + predictedEndLabel + "\n")
+	g.GenerateLabel()
+}
+
+func (g *AARCH64Generator) GenerateVarReassignment(v *ast.VarReassignmentStatement) {
+	tracer.Trace("GenerateVarReassignment")
+	defer tracer.Untrace("GenerateVarReassignment")
+	// find the variable's location in the stack
+	offset := g.GetVarStackOffset(v.Name.Value)
+	// update it with the new value
+	switch val := v.Value.(type) {
+	case *ast.IntegerLiteral:
+		var sloc StorageLoc
+		for _, v := range Sls {
+			_, ok := g.VirtualRegisters[v]
+			if !ok {
+				g.VirtualRegisters[v] = "TEMP"
+				sloc = v
+				break
+			}
+		}
+		g.out.WriteString("mov " + StorageLocs[sloc] + ", " + fmt.Sprintf("#%d", val.Value) + "\n")
+		// g.out.WriteString("str " + StorageLocs[sloc] + ", [sp, #" + fmt.Sprintf("%d", stackloc) + "]\n")
+		g.out.WriteString("str " + StorageLocs[sloc] + ", " + fmt.Sprintf("[sp, #%d]", offset) + "\n")
+	case *ast.Identifier:
+		g.out.WriteString("str " + StorageLocs[g.GenerateIdentifier(val)] + ", " + fmt.Sprintf("[sp, #%d]", offset) + "\n")
+	// case *ast.CallExpression:
+	// g.GenerateCall(val)
+	// g.out.WriteString("str " + "%rax" + ", " + fmt.Sprintf("-%d(%%rbp)", offset) + "\n")
+	case *ast.InfixExpression:
+		sloc := g.GenerateInfix(v.Value.(*ast.InfixExpression))
+		g.out.WriteString("str " + StorageLocs[sloc] + ", " + fmt.Sprintf("-%d(%%rbp)", offset) + "\n")
+	}
+	// remove the old value from any registers
+	sloc, _ := g.GetVarStorageLoc(v.Name.Value)
+	if sloc != NULLSTORAGE {
+		g.out.WriteString("mov " + StorageLocs[sloc] + ", #0\n")
+		delete(g.VirtualRegisters, sloc)
+	}
 }

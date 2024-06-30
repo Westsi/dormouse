@@ -219,7 +219,6 @@ func (g *X64Generator) GenerateFunction(f *ast.FunctionDefinition) {
 }
 
 func (g *X64Generator) GenerateVarDef(v *ast.VarStatement) {
-	// TODO: massive changes needed here!!!
 	tracer.Trace("GenerateVarDef")
 	defer tracer.Untrace("GenerateVarDef")
 	fmt.Printf("%T\n", v.Value.(*ast.ExpressionStatement).Expression)
@@ -357,12 +356,14 @@ func (g *X64Generator) GetInfixOperands(node *ast.InfixExpression) (string, stri
 	tracer.Trace("GetInfixOperands")
 	defer tracer.Untrace("GetInfixOperands")
 	var leftS, rightS string
-	var leftLoc StorageLoc
+	var leftLoc StorageLoc // TODO: fix bug with something like int y = x*8 where x would be
 	switch left := node.Left.(type) {
 	case *ast.Identifier:
 		leftLoc = g.GenerateIdentifier(left)
 		leftS = StorageLocs[leftLoc]
 		fmt.Println(leftS)
+	case *ast.InfixExpression:
+		leftS = StorageLocs[g.GenerateInfix(left)]
 	case *ast.IntegerLiteral:
 		// leftS = "$" + fmt.Sprintf("%d", left.Value)
 		for _, v := range Sls {
