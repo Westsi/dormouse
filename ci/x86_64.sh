@@ -24,9 +24,9 @@ while IFS= read -r line; do
             break
         fi
         echo "$inf"
-        if [ "$inf" == "arithmetic" ]; then
+        if [[ "$inf" == "arithmetic" ]]; then
             # TODO: remove this chunk when division is implemented
-            continue
+            break
         fi
         ./drm -a x86_64 ci/test/$inf.dor
         ./out/x86_64/$inf
