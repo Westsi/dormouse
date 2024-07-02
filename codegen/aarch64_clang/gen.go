@@ -3,6 +3,7 @@ package aarch64_clang
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/westsi/dormouse/ast"
@@ -193,7 +194,11 @@ func (g *AARCH64Generator) GenerateIdentifier(i *ast.Identifier) StorageLoc {
 	if storageLoc == DEFINES {
 		for k, v := range g.Gdefs {
 			if i.Value == k {
-				g.out.WriteString(v)
+				val, err := strconv.ParseInt(v, 0, 64)
+				if err != nil {
+					fmt.Println("error in parsing integer in define")
+				}
+				return g.GenerateIntegerLiteral(&ast.IntegerLiteral{Token: i.Token, Value: val})
 			}
 		}
 	}
