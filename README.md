@@ -1,6 +1,9 @@
 # Dormouse
 A C-Like statically typed programming language.
 
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/Westsi/dormouse/ci.yml?style=for-the-badge&logo=github)
+
+
 ## Why another one?
 - For me to learn
 
