@@ -25,7 +25,7 @@ while IFS= read -r line; do
         fi
         echo "$inf"
         ./drm -a x86_64 ci/test/$inf.dor
-        ./out/aarch64/$inf
+        ./out/x86_64/$inf
         rc=$?
     done
 done < ./ci/test/metadata.tests
