@@ -36,7 +36,9 @@ func main() {
 	}
 	opts.BaseDir = strings.Join(strings.Split(opts.Fname, "/")[0:len(strings.Split(opts.Fname, "/"))-1], "/") + "/"
 	opts.Fname = strings.Split((strings.Split(opts.Fname, "/")[len(strings.Split(opts.Fname, "/"))-1]), ".")[0]
-	fmt.Println(opts)
+	if opts.Debug {
+		fmt.Println(opts)
+	}
 	run(opts)
 }
 
@@ -86,7 +88,7 @@ func Compile(opts *Options, lexer *lex.Lexer) {
 	if len(p.Errors()) > 0 {
 		os.Exit(1)
 	}
-	fmt.Println(ast.String())
+	// fmt.Println(ast.String())
 	var cg codegen.CodeGenerator
 	switch opts.TargetArch {
 	case "x86_64":
@@ -122,7 +124,7 @@ func ResolveImports(prevImps []string, baseDir, imp string) ([]*lex.Lexer, []str
 		}
 		globalDefines[k] = v
 	}
-	fmt.Println("Imported:", imported)
+	// fmt.Println("Imported:", imported)
 	prevImps = append(prevImps, imp)
 	for _, imp := range imported {
 		l, pi := ResolveImports(prevImps, baseDir, imp)

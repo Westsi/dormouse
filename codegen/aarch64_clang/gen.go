@@ -159,7 +159,6 @@ func (g *AARCH64Generator) GenerateExpression(node ast.Expression) StorageLoc {
 func (g *AARCH64Generator) GenerateBlock(b *ast.BlockStatement) {
 	defer tracer.Untrace(tracer.Trace("GenerateBlock"))
 	for _, stmt := range b.Statements {
-		fmt.Println(stmt.NType())
 		switch stmt := stmt.(type) {
 		case *ast.FunctionDefinition:
 			g.GenerateFunction(stmt)
@@ -274,7 +273,6 @@ func (g *AARCH64Generator) GetNextEmptyStackLoc() int {
 func (g *AARCH64Generator) GenerateVarDef(v *ast.VarStatement) {
 	tracer.Trace("GenerateVarDef")
 	defer tracer.Untrace("GenerateVarDef")
-	fmt.Printf("%T\n", v.Value.(*ast.ExpressionStatement).Expression)
 	sloc := g.GenerateExpression(v.Value.(*ast.ExpressionStatement).Expression)
 	if sloc == NULLSTORAGE {
 		fmt.Println("\033[31mPROBLEM PANICCCCCCC\033[0m")
@@ -293,8 +291,6 @@ func (g *AARCH64Generator) GenerateInfix(node *ast.InfixExpression) StorageLoc {
 	tracer.Trace("GenerateInfix")
 	defer tracer.Untrace("GenerateInfix")
 	leftS, rightS, destLoc := g.GetInfixOperands(node)
-
-	fmt.Println(node.Operator)
 
 	switch node.Operator {
 	case "+":
@@ -324,7 +320,6 @@ func (g *AARCH64Generator) GetInfixOperands(node *ast.InfixExpression) (string, 
 	switch left := node.Left.(type) {
 	case *ast.Identifier:
 		leftS = StorageLocs[g.GenerateIdentifier(left)]
-		fmt.Println(leftS)
 	case *ast.InfixExpression:
 		leftS = StorageLocs[g.GenerateInfix(left)]
 	case *ast.CallExpression:

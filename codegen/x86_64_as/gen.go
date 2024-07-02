@@ -176,7 +176,6 @@ func (g *X64Generator) GenerateBlock(b *ast.BlockStatement) {
 	tracer.Trace("GenerateBlock")
 	defer tracer.Untrace("GenerateBlock")
 	for _, stmt := range b.Statements {
-		fmt.Println(stmt.NType())
 		switch stmt := stmt.(type) {
 		case *ast.FunctionDefinition:
 			g.GenerateFunction(stmt)
@@ -223,7 +222,6 @@ func (g *X64Generator) GenerateFunction(f *ast.FunctionDefinition) {
 func (g *X64Generator) GenerateVarDef(v *ast.VarStatement) {
 	tracer.Trace("GenerateVarDef")
 	defer tracer.Untrace("GenerateVarDef")
-	fmt.Printf("%T\n", v.Value.(*ast.ExpressionStatement).Expression)
 	sloc := g.GenerateExpression(v.Value.(*ast.ExpressionStatement).Expression)
 	if sloc == NULLSTORAGE {
 		fmt.Println("\033[31mPROBLEM PANICCCCCCC\033[0m")
@@ -363,7 +361,6 @@ func (g *X64Generator) GetInfixOperands(node *ast.InfixExpression) (string, stri
 	case *ast.Identifier:
 		leftLoc = g.GenerateIdentifier(left)
 		leftS = StorageLocs[leftLoc]
-		fmt.Println(leftS)
 	case *ast.InfixExpression:
 		leftS = StorageLocs[g.GenerateInfix(left)]
 	case *ast.IntegerLiteral:
