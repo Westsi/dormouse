@@ -8,6 +8,9 @@ jobs:
   #   steps:
   #     - name: Checkout
   #       uses: actions/checkout@v4
+  #     - uses: actions/setup-go@v5
+  #       with:
+  #         go-version: '^1.21' # The Go version to download (if necessary) and use.
   #     - name: Build and Test
   #       run: sh ci/x86_64.sh
   aarch64:
@@ -15,5 +18,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '^1.21' # The Go version to download (if necessary) and use.
       - name: Build and Test
         run: sh ci/aarch64.sh
