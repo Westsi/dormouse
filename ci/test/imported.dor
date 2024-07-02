@@ -1,5 +1,5 @@
 int impfunc() {
     int x = 8
     int y = 6
-    return x * y / 2
+    return x * y
 }
