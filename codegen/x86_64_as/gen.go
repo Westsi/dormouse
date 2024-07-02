@@ -168,6 +168,7 @@ func (g *X64Generator) GenerateExpression(node ast.Expression) StorageLoc {
 		g.GenerateWhileLoop(node)
 	case *ast.CallExpression:
 		g.GenerateCall(node)
+		return RAX
 	}
 	return NULLSTORAGE
 }
