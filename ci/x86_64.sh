@@ -24,7 +24,7 @@ while IFS= read -r line; do
             break
         fi
         echo "$inf"
-        if [[ "$inf" == "arithmetic" ]]; then
+        if [[ "$inf" == *"arithmetic"* ]]; then
             # TODO: remove this chunk when division is implemented
             break
         fi
