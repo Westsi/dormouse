@@ -1,3 +1,9 @@
 return:0
 varret:3
-arithmetic:26
+arithmetic:10
+if:1
+define:8
+import:24
+fncall:27
+fnargs:34
+while:3

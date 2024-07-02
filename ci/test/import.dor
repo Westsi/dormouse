@@ -1,0 +1,6 @@
+@import "imported"
+
+int main() {
+    int x = impfunc()
+    return x
+}

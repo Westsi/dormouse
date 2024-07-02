@@ -3,6 +3,6 @@ int fn() {
 }
 
 int main() {
-    int x = fn() ^ 11
+    int x = fn() * 3
     return x
 }

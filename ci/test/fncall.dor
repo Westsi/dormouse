@@ -1,0 +1,9 @@
+int test() {
+    int x = 27
+    return x
+}
+
+int main() {
+    int r = test()
+    return r
+}

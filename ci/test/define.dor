@@ -1,0 +1,6 @@
+@define FOUR 4
+
+int main() {
+    int x = FOUR * 2
+    return x
+}
