@@ -3,16 +3,16 @@ on:
   pull_request:
   push:
 jobs:
-  # x86_64:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v4
-  #     - uses: actions/setup-go@v5
-  #       with:
-  #         go-version: '^1.21' # The Go version to download (if necessary) and use.
-  #     - name: Build and Test
-  #       run: sh ci/x86_64.sh
+  x86_64:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '^1.21' # The Go version to download (if necessary) and use.
+      - name: Build and Test
+        run: sh ci/x86_64.sh
   aarch64:
     runs-on: macos-latest
     steps:
