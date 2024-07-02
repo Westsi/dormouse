@@ -160,8 +160,9 @@ func (g *X64Generator) GenerateExpression(node ast.Expression) StorageLoc {
 	case *ast.Identifier:
 		return g.GenerateIdentifier(node)
 	case *ast.IntegerLiteral:
-		g.out.WriteString("movq $" + fmt.Sprintf("%d", node.Value) + ", %rax\n") //TODO: give this same treatment as the identifier case - picking regs
-		return RAX
+		// g.out.WriteString("movq $" + fmt.Sprintf("%d", node.Value) + ", %rax\n")
+		// return RAX
+		return g.GenerateIntegerLiteral(node)
 	case *ast.IfExpression:
 		g.GenerateIf(node)
 	case *ast.WhileExpression:
@@ -366,16 +367,8 @@ func (g *X64Generator) GetInfixOperands(node *ast.InfixExpression) (string, stri
 		leftS = StorageLocs[g.GenerateInfix(left)]
 	case *ast.IntegerLiteral:
 		// leftS = "$" + fmt.Sprintf("%d", left.Value)
-		for _, v := range Sls {
-			_, ok := g.VirtualRegisters[v]
-			if !ok {
-				g.VirtualRegisters[v] = "TEMP"
-				leftLoc = v
-				break
-			}
-		}
+		leftLoc = g.GenerateIntegerLiteral(left)
 		leftS = StorageLocs[leftLoc]
-		g.out.WriteString("movq $" + fmt.Sprintf("%d", left.Value) + ", " + leftS + "\n")
 	}
 
 	switch right := node.Right.(type) {
@@ -387,6 +380,22 @@ func (g *X64Generator) GetInfixOperands(node *ast.InfixExpression) (string, stri
 		rightS = StorageLocs[g.GenerateInfix(right)]
 	}
 	return leftS, rightS, leftLoc
+}
+
+func (g *X64Generator) GenerateIntegerLiteral(il *ast.IntegerLiteral) StorageLoc {
+	var sloc StorageLoc
+	for _, v := range Sls {
+		_, ok := g.VirtualRegisters[v]
+		if !ok {
+			g.VirtualRegisters[v] = "TEMP"
+			sloc = v
+			break
+		}
+	}
+
+	g.out.WriteString("movq $" + fmt.Sprintf("%d", il.Value) + ", " + StorageLocs[sloc] + "\n")
+
+	return sloc
 }
 
 func (g *X64Generator) GenerateIf(i *ast.IfExpression) {
