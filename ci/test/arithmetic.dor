@@ -1,7 +1,6 @@
 int main() {
     int x = 3
-    int y = 8
-    int z = x * y + 2
+    int z = x * 8 + 2
     int a = z / 2
     return a - 3
 }
