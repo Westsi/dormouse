@@ -47,6 +47,11 @@ const (
 	NEWLINE
 	AND
 	NOT
+	OR
+	BWOR
+	BWAND
+	BWNOT
+	BWXOR
 	GT
 	LT
 	TRUE
@@ -94,6 +99,11 @@ var tokens = []string{
 	NEWLINE:       "NEWLINE",
 	AND:           "AND",
 	NOT:           "NOT",
+	OR:            "OR",
+	BWOR:          "BWOR",
+	BWAND:         "BWAND",
+	BWNOT:         "BWNOT",
+	BWXOR:         "BWXOR",
 	GT:            "GT",
 	LT:            "LT",
 	TRUE:          "TRUE",

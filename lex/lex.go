@@ -91,6 +91,16 @@ func (l *Lexer) LexChar() (Position, Token, string) {
 			return l.pos, MUL, string(r)
 		case '-':
 			return l.pos, SUB, string(r)
+		case '|':
+			t, s := l.lexPipe(r)
+			return l.pos, t, s
+		case '&':
+			t, s := l.lexAmpersand(r)
+			return l.pos, t, s
+		case '^':
+			return l.pos, BWXOR, string(r)
+		case '~':
+			return l.pos, BWNOT, string(r)
 		case '/':
 			sym, val := l.lexSlash(string(r))
 			return l.pos, sym, val
@@ -273,6 +283,30 @@ func (l *Lexer) lexEquals(r rune) (Token, string) {
 		return EQUALS, s
 	default:
 		return ASSIGN, s
+	}
+}
+
+func (l *Lexer) lexAmpersand(r rune) (Token, string) {
+	s := string(r)
+	r, _, _ = l.reader.ReadRune()
+	switch r {
+	case '&':
+		s = s + string(r)
+		return AND, s
+	default:
+		return BWAND, s
+	}
+}
+
+func (l *Lexer) lexPipe(r rune) (Token, string) {
+	s := string(r)
+	r, _, _ = l.reader.ReadRune()
+	switch r {
+	case '|':
+		s = s + string(r)
+		return OR, s
+	default:
+		return BWOR, s
 	}
 }
 

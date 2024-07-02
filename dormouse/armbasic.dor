@@ -1,9 +1,8 @@
+int fn() {
+    return 5
+}
+
 int main() {
-    int x = 1
-    if (x > 0) {
-        x = 3
-    } else {
-        x = 2
-    }
+    int x = fn() ^ 11
     return x
 }

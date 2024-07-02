@@ -65,14 +65,8 @@ var Sls = []StorageLoc{X0, X1, X2, X3, X4, X5, X6, X7, X8, X9, X10, X11, X12, X1
 
 var StorageLocs = []string{"x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17", "x18", "x19", "x20", "x21", "x22", "x23", "x24", "x25", "x26", "x27", "x28"}
 
-var FNCallRegs = []StorageLoc{X0, X1, X2, X3, X4, X5, X6, X7} // i think this is just storage locations from x0 ascending
+var FNCallRegs = []StorageLoc{X0, X1, X2, X3, X4, X5, X6, X7}
 
-// TODO: change registers from x86_64 to aarch64
-// I THINK:
-// x29 - frame pointer - rbp
-// sp - stack pointer - rsp
-// x0 - return value - rax
-// CPSR - eflags
 // https://johannst.github.io/notes/arch/arm64.html
 
 func New(fpath string, ast *ast.Program, defs map[string]string, lc int) *AARCH64Generator {
@@ -148,12 +142,16 @@ func (g *AARCH64Generator) GenerateExpression(node ast.Expression) StorageLoc {
 	case *ast.Identifier:
 		return g.GenerateIdentifier(node)
 	case *ast.IntegerLiteral:
-		g.out.WriteString("mov x0, " + fmt.Sprintf("%d", node.Value) + "\n") //TODO: give this same treatment as the identifier case - picking regs
-		return X0
+		// g.out.WriteString("mov x0, " + fmt.Sprintf("#%d", node.Value) + "\n") //TODO: give this same treatment as the identifier case - picking regs
+		// return X0
+		return g.GenerateIntegerLiteral(node)
 	case *ast.IfExpression:
 		g.GenerateIf(node)
-		// case *ast.WhileExpression:
-		// 	g.GenerateWhileLoop(node)
+	// case *ast.WhileExpression:
+	// 	g.GenerateWhileLoop(node)
+	case *ast.CallExpression:
+		g.GenerateCall(node)
+		return X0
 	}
 	return NULLSTORAGE
 }
@@ -296,14 +294,23 @@ func (g *AARCH64Generator) GenerateInfix(node *ast.InfixExpression) StorageLoc {
 	defer tracer.Untrace("GenerateInfix")
 	leftS, rightS, destLoc := g.GetInfixOperands(node)
 
+	fmt.Println(node.Operator)
+
 	switch node.Operator {
 	case "+":
 		g.out.WriteString("add ")
 	case "-":
 		g.out.WriteString("sub ")
 	case "*":
-		g.out.WriteString("imul ") // this needs some other stuff - only works with registers no ints
-		// TODO: implement division
+		g.out.WriteString("mul ")
+	case "/":
+		g.out.WriteString("sdiv ")
+	case "^":
+		g.out.WriteString("eor ")
+	case "&":
+		g.out.WriteString("and ")
+	case "|":
+		g.out.WriteString("orr ")
 	}
 	g.out.WriteString(StorageLocs[destLoc] + ", " + leftS + ", " + rightS + "\n")
 	return destLoc
@@ -320,26 +327,31 @@ func (g *AARCH64Generator) GetInfixOperands(node *ast.InfixExpression) (string, 
 		fmt.Println(leftS)
 	case *ast.InfixExpression:
 		leftS = StorageLocs[g.GenerateInfix(left)]
+	case *ast.CallExpression:
+		g.GenerateCall(left)
+		leftS = StorageLocs[X0]
 	case *ast.IntegerLiteral:
 		// leftS = "$" + fmt.Sprintf("%d", left.Value)
-		var sloc StorageLoc
-		for _, v := range Sls {
-			_, ok := g.VirtualRegisters[v]
-			if !ok {
-				g.VirtualRegisters[v] = "TEMP"
-				sloc = v
-				break
-			}
-		}
-		leftS = StorageLocs[sloc]
-		g.out.WriteString("mov " + leftS + ", " + fmt.Sprintf("%d", left.Value) + "\n")
+		// var sloc StorageLoc
+		// for _, v := range Sls {
+		// 	_, ok := g.VirtualRegisters[v]
+		// 	if !ok {
+		// 		g.VirtualRegisters[v] = "TEMP"
+		// 		sloc = v
+		// 		break
+		// 	}
+		// }
+		// leftS = StorageLocs[sloc]
+		// g.out.WriteString("mov " + leftS + ", " + fmt.Sprintf("%d", left.Value) + "\n")
+		leftS = StorageLocs[g.GenerateIntegerLiteral(left)]
 	}
 
 	switch right := node.Right.(type) {
 	case *ast.Identifier:
 		rightS = StorageLocs[g.GenerateIdentifier(right)]
 	case *ast.IntegerLiteral:
-		rightS = "#" + fmt.Sprintf("%d", right.Value)
+		// rightS = "#" + fmt.Sprintf("%d", right.Value)
+		rightS = StorageLocs[g.GenerateIntegerLiteral(right)]
 	case *ast.InfixExpression:
 		rightS = StorageLocs[g.GenerateInfix(right)]
 	}
@@ -353,6 +365,22 @@ func (g *AARCH64Generator) GetInfixOperands(node *ast.InfixExpression) (string, 
 		}
 	}
 	return leftS, rightS, destLoc
+}
+
+func (g *AARCH64Generator) GenerateIntegerLiteral(il *ast.IntegerLiteral) StorageLoc {
+	var sloc StorageLoc
+	for _, v := range Sls {
+		_, ok := g.VirtualRegisters[v]
+		if !ok {
+			g.VirtualRegisters[v] = "TEMP"
+			sloc = v
+			break
+		}
+	}
+
+	g.out.WriteString("mov " + StorageLocs[sloc] + ", " + fmt.Sprintf("#%d", il.Value) + "\n")
+
+	return sloc
 }
 
 func (g *AARCH64Generator) GenerateLabel() string {
@@ -433,23 +461,13 @@ func (g *AARCH64Generator) GenerateVarReassignment(v *ast.VarReassignmentStateme
 	// update it with the new value
 	switch val := v.Value.(type) {
 	case *ast.IntegerLiteral:
-		var sloc StorageLoc
-		for _, v := range Sls {
-			_, ok := g.VirtualRegisters[v]
-			if !ok {
-				g.VirtualRegisters[v] = "TEMP"
-				sloc = v
-				break
-			}
-		}
-		g.out.WriteString("mov " + StorageLocs[sloc] + ", " + fmt.Sprintf("#%d", val.Value) + "\n")
-		// g.out.WriteString("str " + StorageLocs[sloc] + ", [sp, #" + fmt.Sprintf("%d", stackloc) + "]\n")
+		sloc := g.GenerateIntegerLiteral(val)
 		g.out.WriteString("str " + StorageLocs[sloc] + ", " + fmt.Sprintf("[sp, #%d]", offset) + "\n")
 	case *ast.Identifier:
 		g.out.WriteString("str " + StorageLocs[g.GenerateIdentifier(val)] + ", " + fmt.Sprintf("[sp, #%d]", offset) + "\n")
-	// case *ast.CallExpression:
-	// g.GenerateCall(val)
-	// g.out.WriteString("str " + "%rax" + ", " + fmt.Sprintf("-%d(%%rbp)", offset) + "\n")
+	case *ast.CallExpression:
+		g.GenerateCall(val)
+		g.out.WriteString("str " + "x0" + ", " + fmt.Sprintf("[sp, #%d]", offset) + "\n")
 	case *ast.InfixExpression:
 		sloc := g.GenerateInfix(v.Value.(*ast.InfixExpression))
 		g.out.WriteString("str " + StorageLocs[sloc] + ", " + fmt.Sprintf("-%d(%%rbp)", offset) + "\n")
@@ -460,4 +478,25 @@ func (g *AARCH64Generator) GenerateVarReassignment(v *ast.VarReassignmentStateme
 		g.out.WriteString("mov " + StorageLocs[sloc] + ", #0\n")
 		delete(g.VirtualRegisters, sloc)
 	}
+}
+
+func (g *AARCH64Generator) GenerateCall(c *ast.CallExpression) {
+	tracer.Trace("GenerateCall")
+	defer tracer.Untrace("GenerateCall")
+	for i, arg := range c.Arguments {
+		sloc := g.GenerateExpression(arg)
+		if sloc != NULLSTORAGE {
+			g.out.WriteString("mov " + StorageLocs[sloc] + ", " + StorageLocs[FNCallRegs[i]] + "\n")
+		}
+	}
+	// save x29 (frame pointer) and x30 (link register, holds return address) to stack before calling and potentially overwriting them
+	g.out.WriteString("stp x29, x30, [sp, #16]\n")
+	g.out.WriteString("add x29, sp, #16\n")
+	g.out.WriteString("bl _" + c.Function.Value + "\n")
+	g.out.WriteString("ldp x29, x30, [sp, #16]\n")
+
+	for sl := range g.VirtualRegisters {
+		delete(g.VirtualRegisters, sl)
+	}
+	g.VirtualRegisters[X0] = "CALLRET"
 }

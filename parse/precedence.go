@@ -7,6 +7,8 @@ const (
 	LOWEST
 	EQUALS
 	LESSGREATER
+	LOGICAL
+	BITWISE
 	SUM
 	PRODUCT
 	PREFIX
@@ -18,6 +20,13 @@ var precedences = map[lex.Token]int{
 	lex.NOTEQUALS: EQUALS,
 	lex.LT:        LESSGREATER,
 	lex.GT:        LESSGREATER,
+	lex.AND:       LOGICAL,
+	lex.OR:        LOGICAL,
+	lex.NOT:       LOGICAL,
+	lex.BWXOR:     BITWISE,
+	lex.BWAND:     BITWISE,
+	lex.BWNOT:     BITWISE,
+	lex.BWOR:      BITWISE,
 	lex.ADD:       SUM,
 	lex.SUB:       SUM,
 	lex.MUL:       PRODUCT,

@@ -48,6 +48,7 @@ func New(tokens []lex.LexedTok) *Parser {
 	p.registerPrefix(lex.INTLITERAL, p.parseIntegerLiteral)
 	p.registerPrefix(lex.NOT, p.parsePrefixExpression)
 	p.registerPrefix(lex.SUB, p.parsePrefixExpression)
+	p.registerPrefix(lex.BWNOT, p.parsePrefixExpression)
 	p.registerPrefix(lex.TRUE, p.parseBoolean)
 	p.registerPrefix(lex.FALSE, p.parseBoolean)
 	p.registerPrefix(lex.IF, p.parseIfExpression)
@@ -64,6 +65,11 @@ func New(tokens []lex.LexedTok) *Parser {
 	p.registerInfix(lex.LT, p.parseInfixExpression)
 	p.registerInfix(lex.GT, p.parseInfixExpression)
 	p.registerInfix(lex.LPAREN, p.parseCallExpression)
+	p.registerInfix(lex.AND, p.parseInfixExpression)
+	p.registerInfix(lex.OR, p.parseInfixExpression)
+	p.registerInfix(lex.BWAND, p.parseInfixExpression)
+	p.registerInfix(lex.BWOR, p.parseInfixExpression)
+	p.registerInfix(lex.BWXOR, p.parseInfixExpression)
 	return p
 }
 
@@ -123,6 +129,10 @@ func (p *Parser) parseStatement() ast.Statement {
 	case lex.TYPE:
 		return p.parseTypeBeginStatement()
 	case lex.IDENT:
+		if p.peekTokenIs(lex.LPAREN) {
+			fmt.Println("Is function call")
+			return p.parseExpressionStatement()
+		}
 		return p.parseVarReassignment(p.curTok)
 	default:
 		return p.parseExpressionStatement()
