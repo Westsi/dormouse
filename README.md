@@ -1,6 +1,9 @@
 # Dormouse
 A C-Like statically typed programming language.
 
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/Westsi/dormouse/ci.yml?style=for-the-badge&logo=github)
+
+
 ## Why another one?
 - For me to learn
 
@@ -15,10 +18,10 @@ Download repo, install Go. `go run . PATH_TO_FILE`. As easy as it gets.
 
 ## Features
 - Parsing and lexing for a good chunk of the syntax.
-- Codegen for x86_64, more architectures being worked on, starting with ARM
+- Codegen for x86_64 and aarch64.
 
 ## Command Line Parameters
 - `-d` - debug print
-- `-a` - target architecture. supports x86_64, with aarch64 in the works
+- `-a` - target architecture. supports x86_64, and aarch64 without a couple features of x86_64.
 - `-v` - verbose
 - `-o` - file name of output file which will be placed in `out/ARCHITECTURE`
