@@ -354,6 +354,9 @@ func (g *AARCH64Generator) GetInfixOperands(node *ast.InfixExpression) (string, 
 		rightS = StorageLocs[g.GenerateIntegerLiteral(right)]
 	case *ast.InfixExpression:
 		rightS = StorageLocs[g.GenerateInfix(right)]
+	case *ast.CallExpression:
+		g.GenerateCall(right)
+		rightS = StorageLocs[X0]
 	}
 
 	for _, v := range Sls {

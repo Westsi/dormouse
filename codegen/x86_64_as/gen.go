@@ -369,6 +369,9 @@ func (g *X64Generator) GetInfixOperands(node *ast.InfixExpression) (string, stri
 		// leftS = "$" + fmt.Sprintf("%d", left.Value)
 		leftLoc = g.GenerateIntegerLiteral(left)
 		leftS = StorageLocs[leftLoc]
+	case *ast.CallExpression:
+		g.GenerateCall(left)
+		leftS = StorageLocs[RAX]
 	}
 
 	switch right := node.Right.(type) {
@@ -378,6 +381,9 @@ func (g *X64Generator) GetInfixOperands(node *ast.InfixExpression) (string, stri
 		rightS = "$" + fmt.Sprintf("%d", right.Value)
 	case *ast.InfixExpression:
 		rightS = StorageLocs[g.GenerateInfix(right)]
+	case *ast.CallExpression:
+		g.GenerateCall(right)
+		rightS = StorageLocs[RAX]
 	}
 	return leftS, rightS, leftLoc
 }
