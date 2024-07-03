@@ -320,7 +320,6 @@ func (g *AARCH64Generator) GenerateInfix(node *ast.InfixExpression) StorageLoc {
 func (g *AARCH64Generator) GetInfixOperands(node *ast.InfixExpression) (string, string, StorageLoc) {
 	tracer.Trace("GetInfixOperands")
 	defer tracer.Untrace("GetInfixOperands")
-	var leftcall, rightcall bool
 	var leftS, rightS string
 	var destLoc StorageLoc
 	switch left := node.Left.(type) {
@@ -331,7 +330,6 @@ func (g *AARCH64Generator) GetInfixOperands(node *ast.InfixExpression) (string, 
 	case *ast.CallExpression:
 		g.GenerateCall(left)
 		leftS = StorageLocs[X0]
-		leftcall = true
 	case *ast.IntegerLiteral:
 		leftS = StorageLocs[g.GenerateIntegerLiteral(left)]
 	}
@@ -347,17 +345,6 @@ func (g *AARCH64Generator) GetInfixOperands(node *ast.InfixExpression) (string, 
 	case *ast.CallExpression:
 		g.GenerateCall(right)
 		rightS = StorageLocs[X0]
-		rightcall = true
-	}
-
-	if leftcall && rightS == "x0" {
-		rightS = "x1"
-		g.VirtualRegisters[X1] = "TEMP"
-	}
-
-	if rightcall && leftS == "x0" {
-		leftS = "x1"
-		g.VirtualRegisters[X1] = "TEMP"
 	}
 
 	for _, v := range Sls {
