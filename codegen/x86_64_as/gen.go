@@ -357,6 +357,7 @@ func (g *X64Generator) GenerateInfix(node *ast.InfixExpression) StorageLoc {
 func (g *X64Generator) GetInfixOperands(node *ast.InfixExpression) (string, string, StorageLoc) {
 	tracer.Trace("GetInfixOperands")
 	defer tracer.Untrace("GetInfixOperands")
+	var leftcall, rightcall bool
 	var leftS, rightS string
 	var leftLoc StorageLoc // TODO: fix bug with something like int y = x*8 where x would be
 	switch left := node.Left.(type) {
@@ -371,6 +372,7 @@ func (g *X64Generator) GetInfixOperands(node *ast.InfixExpression) (string, stri
 		leftS = StorageLocs[leftLoc]
 	case *ast.CallExpression:
 		g.GenerateCall(left)
+		leftcall = true
 		leftS = StorageLocs[RAX]
 	}
 
@@ -384,6 +386,17 @@ func (g *X64Generator) GetInfixOperands(node *ast.InfixExpression) (string, stri
 	case *ast.CallExpression:
 		g.GenerateCall(right)
 		rightS = StorageLocs[RAX]
+		rightcall = true
+	}
+
+	if leftcall && rightS == "%rax" {
+		rightS = "%rcx"
+		g.VirtualRegisters[RCX] = "TEMP"
+	}
+
+	if rightcall && leftS == "%rax" {
+		leftS = "%rcx"
+		g.VirtualRegisters[RCX] = "TEMP"
 	}
 	return leftS, rightS, leftLoc
 }
