@@ -25,3 +25,24 @@ Download repo, install Go. `go run . PATH_TO_FILE`. As easy as it gets.
 - `-a` - target architecture. supports x86_64, and aarch64 without a couple features of x86_64.
 - `-v` - verbose
 - `-o` - file name of output file which will be placed in `out/ARCHITECTURE`
+
+## SSA
+To see output, view `out/ssa`. An example program is shown below.
+
+Before optimizations:
+```
+func main(int v1, int v2) int {
+    int v3 = 7 + v1
+    int v4 = 8 + v2
+    int v5 = v3 + v4
+    return v5
+}
+```
+
+After optimizations:
+```
+func main(int v1, int v2) int {
+    v5 = 15 + v1 + v2
+    return v5
+}
+```

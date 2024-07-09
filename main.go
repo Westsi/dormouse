@@ -13,6 +13,7 @@ import (
 	"github.com/westsi/dormouse/codegen/x86_64_as"
 	"github.com/westsi/dormouse/lex"
 	"github.com/westsi/dormouse/parse"
+	"github.com/westsi/dormouse/ssa"
 	"github.com/westsi/dormouse/tracer"
 )
 
@@ -88,6 +89,11 @@ func Compile(opts *Options, lexer *lex.Lexer) {
 	if len(p.Errors()) > 0 {
 		os.Exit(1)
 	}
+
+	ssag := ssa.New(fname+".dssa", ast, globalDefines)
+	ssag.Generate()
+	ssag.Write()
+	os.Exit(0)
 	// fmt.Println(ast.String())
 	var cg codegen.CodeGenerator
 	switch opts.TargetArch {
