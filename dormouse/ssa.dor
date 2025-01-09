@@ -1,6 +1,6 @@
-int main() {
-    int a = 6
-    int b = 7
+int test(int x, int y) {
+    int a = 7 + x
+    int b = 8 + y
     int c = a + b
     return c
 }

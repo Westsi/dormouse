@@ -1,5 +1,11 @@
 package main
 
+/*
+TODO:
+bring new label improvements to x86_64 for nested loops
+
+*/
+
 import (
 	"flag"
 	"fmt"
@@ -13,12 +19,11 @@ import (
 	"github.com/westsi/dormouse/codegen/x86_64_as"
 	"github.com/westsi/dormouse/lex"
 	"github.com/westsi/dormouse/parse"
-	"github.com/westsi/dormouse/ssa"
 	"github.com/westsi/dormouse/tracer"
 )
 
 var globalDefines = make(map[string]string)
-var labelcnt int = 0
+var condcnt int = 0
 
 func main() {
 	opts := Options{}
@@ -82,27 +87,27 @@ func Compile(opts *Options, lexer *lex.Lexer) {
 	fname := strings.Split((strings.Split(lexer.GetRdrFname(), "/")[len(strings.Split(lexer.GetRdrFname(), "/"))-1]), ".")[0]
 	p := parse.New(tokens)
 	ast := p.Parse()
-	fmt.Println("Errors:")
-	for _, err := range p.Errors() {
-		fmt.Println(err)
-	}
 	if len(p.Errors()) > 0 {
+		fmt.Println("Errors:")
+		for _, err := range p.Errors() {
+			fmt.Println(err)
+		}
 		os.Exit(1)
 	}
 
-	ssag := ssa.New(fname+".dssa", ast, globalDefines)
-	ssag.Generate()
-	ssag.Write()
-	os.Exit(0)
+	// ssag := ssa.New(fname+".dssa", ast, globalDefines)
+	// ssag.Generate()
+	// ssag.Write()
+	// os.Exit(0)
 	// fmt.Println(ast.String())
 	var cg codegen.CodeGenerator
 	switch opts.TargetArch {
 	case "x86_64":
-		cg = x86_64_as.New(fname+".s", ast, globalDefines, labelcnt)
+		cg = x86_64_as.New(fname+".s", ast, globalDefines, condcnt)
 	case "aarch64":
-		cg = aarch64_clang.New(fname+".s", ast, globalDefines, labelcnt)
+		cg = aarch64_clang.New(fname+".s", ast, globalDefines, condcnt)
 	}
-	labelcnt = cg.Generate()
+	condcnt = cg.Generate()
 	cg.Write()
 
 }

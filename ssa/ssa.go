@@ -1,19 +1,18 @@
 package ssa
 
 import (
-	"fmt"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/westsi/dormouse/ast"
 )
 
 type SSAGen struct {
-	fpath string
-	out   strings.Builder
-	AST   ast.Program
-	Gdefs map[string]string
+	fpath   string
+	out     strings.Builder
+	AST     ast.Program
+	Gdefs   map[string]string
+	vcounts map[string]int
 }
 
 type DType int
@@ -28,12 +27,17 @@ type Dependent struct {
 	Value string // holds int val itoa or var name
 }
 
+func (s *SSAGen) ow(st string) {
+	s.out.WriteString(st)
+}
+
 func New(fpath string, ast *ast.Program, defs map[string]string) *SSAGen {
 	generator := &SSAGen{
-		fpath: fpath,
-		out:   strings.Builder{},
-		AST:   *ast,
-		Gdefs: defs,
+		fpath:   fpath,
+		out:     strings.Builder{},
+		AST:     *ast,
+		Gdefs:   defs,
+		vcounts: make(map[string]int),
 	}
 	os.MkdirAll("out/ssa", os.ModePerm)
 	return generator
@@ -58,50 +62,6 @@ func (s *SSAGen) Write() {
 	if err != nil {
 		panic(err)
 	}
-}
-
-func (s *SSAGen) ProcessFunction(f *ast.FunctionDefinition) {
-	s.ProcessBlock(f.Body)
-}
-
-func (s *SSAGen) ProcessBlock(b *ast.BlockStatement) {
-	for _, stmt := range b.Statements {
-		switch stmt := stmt.(type) {
-		case *ast.VarStatement:
-			s.ProcessVarStatement(stmt)
-		}
-	}
-}
-
-func (s *SSAGen) ProcessVarStatement(v *ast.VarStatement) {
-	dependents := s.GetDefinitionDependents(v.Value)
-	fmt.Println(dependents)
-}
-
-func (s *SSAGen) GetDefinitionDependents(e ast.Expression) []Dependent {
-	var deps []Dependent
-	switch et := e.(type) {
-	case *ast.InfixExpression:
-		deps = append(deps, s.GetDefinitionDependents(et.Left)...)
-		deps = append(deps, s.GetDefinitionDependents(et.Right)...)
-	case *ast.IntegerLiteral:
-		dep := Dependent{
-			Type:  CONST,
-			Value: strconv.Itoa(int(et.Value)),
-		}
-		deps = append(deps, dep)
-	case *ast.Identifier:
-		dep := Dependent{
-			Type:  VAR,
-			Value: et.Value,
-		}
-		deps = append(deps, dep)
-	case *ast.ExpressionStatement:
-		deps = append(deps, s.GetDefinitionDependents(et.Expression)...)
-	default:
-		fmt.Printf("%T\n", e)
-	}
-	return deps
 }
 
 /*

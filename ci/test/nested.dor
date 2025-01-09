@@ -1,0 +1,11 @@
+int main() {
+    int x = 8
+    int y = 12
+    if (x > 6) {
+        if (y == 11) {
+            return 0
+        }
+        return 1
+    }
+    return 113
+}

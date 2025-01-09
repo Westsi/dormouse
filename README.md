@@ -31,7 +31,7 @@ To see output, view `out/ssa`. An example program is shown below.
 
 Before optimizations:
 ```
-func main(int v1, int v2) int {
+func test(int v1, int v2) int {
     int v3 = 7 + v1
     int v4 = 8 + v2
     int v5 = v3 + v4
@@ -41,7 +41,7 @@ func main(int v1, int v2) int {
 
 After optimizations:
 ```
-func main(int v1, int v2) int {
+func test(int v1, int v2) int {
     v5 = 15 + v1 + v2
     return v5
 }

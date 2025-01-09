@@ -21,7 +21,7 @@ type AARCH64Generator struct {
 	AST              ast.Program
 	VirtualStack     *util.Armstack[codegen.VTabVar]
 	VirtualRegisters map[StorageLoc]string
-	LabelCounter     int
+	ConditionCounter int
 	Gdefs            map[string]string
 }
 
@@ -70,14 +70,14 @@ var FNCallRegs = []StorageLoc{X0, X1, X2, X3, X4, X5, X6, X7}
 
 // https://johannst.github.io/notes/arch/arm64.html
 
-func New(fpath string, ast *ast.Program, defs map[string]string, lc int) *AARCH64Generator {
+func New(fpath string, ast *ast.Program, defs map[string]string, cc int) *AARCH64Generator {
 	generator := &AARCH64Generator{
 		fpath:            fpath,
 		out:              strings.Builder{},
 		AST:              *ast,
 		VirtualStack:     util.NewAStack[codegen.VTabVar](32),
 		VirtualRegisters: map[StorageLoc]string{},
-		LabelCounter:     lc,
+		ConditionCounter: cc,
 		Gdefs:            defs,
 	}
 	os.MkdirAll("out/aarch64", os.ModePerm)
@@ -93,7 +93,7 @@ func (g *AARCH64Generator) Generate() int {
 			g.GenerateFunction(stmt)
 		}
 	}
-	return g.LabelCounter
+	return g.ConditionCounter
 }
 
 func (g *AARCH64Generator) e(tok lex.LexedTok, err string) {
@@ -148,8 +148,8 @@ func (g *AARCH64Generator) GenerateExpression(node ast.Expression) StorageLoc {
 		return g.GenerateIntegerLiteral(node)
 	case *ast.IfExpression:
 		g.GenerateIf(node)
-	// case *ast.WhileExpression:
-	// 	g.GenerateWhileLoop(node)
+	case *ast.WhileExpression:
+		g.GenerateWhileLoop(node)
 	case *ast.CallExpression:
 		g.GenerateCall(node)
 		return X0
@@ -313,6 +313,7 @@ func (g *AARCH64Generator) GenerateInfix(node *ast.InfixExpression) StorageLoc {
 	case "|":
 		g.out.WriteString("orr ")
 	}
+	// fmt.Println(leftS, rightS, destLoc)
 	g.out.WriteString(StorageLocs[destLoc] + ", " + leftS + ", " + rightS + "\n")
 	return destLoc
 }
@@ -359,6 +360,7 @@ func (g *AARCH64Generator) GetInfixOperands(node *ast.InfixExpression) (string, 
 }
 
 func (g *AARCH64Generator) GenerateIntegerLiteral(il *ast.IntegerLiteral) StorageLoc {
+	defer tracer.Untrace(tracer.Trace("GenerateIntegerLiteral"))
 	var sloc StorageLoc
 	for _, v := range Sls {
 		_, ok := g.VirtualRegisters[v]
@@ -372,14 +374,6 @@ func (g *AARCH64Generator) GenerateIntegerLiteral(il *ast.IntegerLiteral) Storag
 	g.out.WriteString("mov " + StorageLocs[sloc] + ", " + fmt.Sprintf("#%d", il.Value) + "\n")
 
 	return sloc
-}
-
-func (g *AARCH64Generator) GenerateLabel() string {
-	tracer.Trace("GenerateLabel")
-	defer tracer.Untrace("GenerateLabel")
-	g.out.WriteString(fmt.Sprintf("LBB%d:\n", g.LabelCounter))
-	g.LabelCounter++
-	return fmt.Sprintf("LBB%d", g.LabelCounter-1)
 }
 
 func (g *AARCH64Generator) GenerateIf(i *ast.IfExpression) {
@@ -410,10 +404,10 @@ func (g *AARCH64Generator) GenerateIf(i *ast.IfExpression) {
 	// b LBB3
 	// LBB3:
 	// ...
-
-	predictedTrueLabel := fmt.Sprintf("LBB%d", g.LabelCounter)
-	predictedFalseLabel := fmt.Sprintf("LBB%d", g.LabelCounter+1)
-	predictedEndLabel := fmt.Sprintf("LBB%d", g.LabelCounter+2)
+	trueLabel := fmt.Sprintf("LBBif%dtrue", g.ConditionCounter)
+	falseLabel := fmt.Sprintf("LBBif%dfalse", g.ConditionCounter)
+	endLabel := fmt.Sprintf("LBBif%dend", g.ConditionCounter)
+	g.ConditionCounter++
 
 	g.out.WriteString("cmp " + leftS + ", " + rightS + "\n")
 	g.out.WriteString("cset x8, ")
@@ -431,15 +425,72 @@ func (g *AARCH64Generator) GenerateIf(i *ast.IfExpression) {
 	case ">=":
 		g.out.WriteString("ge\n")
 	}
-	g.out.WriteString("tbnz x8, #0, " + predictedTrueLabel + "\n")
-	g.out.WriteString("b " + predictedFalseLabel + "\n")
-	g.GenerateLabel()
+	g.out.WriteString("tbnz x8, #0, " + trueLabel + "\n")
+	g.out.WriteString("b " + falseLabel + "\n")
+	g.out.WriteString(trueLabel + ":\n")
 	g.GenerateBlock(i.Consequence)
-	g.out.WriteString("b " + predictedEndLabel + "\n")
-	g.GenerateLabel()
-	g.GenerateBlock(i.Alternative)
-	g.out.WriteString("b " + predictedEndLabel + "\n")
-	g.GenerateLabel()
+	g.out.WriteString("b " + endLabel + "\n")
+	g.out.WriteString(falseLabel + ":\n")
+	if i.Alternative != nil {
+		g.GenerateBlock(i.Alternative)
+	}
+	g.out.WriteString("b " + endLabel + "\n")
+	g.out.WriteString(endLabel + ":\n")
+}
+
+func (g *AARCH64Generator) GenerateWhileLoop(w *ast.WhileExpression) {
+	defer tracer.Untrace(tracer.Trace("GenerateWhileLoop"))
+	// 	b       LBB0_1          ; jump to LBB0_1
+	// COMPAR: LBB0_1:                                 ; =>This Inner Loop Header: Depth=1
+	// 	ldr     w8, [sp, #8]    ; load a to w8
+	// 	subs    w8, w8, #5      ; subtract 5 from w8 and set flags
+	// 	cset    w8, ge          ; set w8 to 1 if w8-5 is greater than or equal to 0, and 0 otherwise
+	// 	tbnz    w8, #0, LBB0_3  ; test if bit 0 of w8 is 0, and if not exit loop (jump to LBB0_3)
+	// 	b       LBB0_2
+	// BODY: LBB0_2:                                 ;   in Loop: Header=BB0_1 Depth=1
+	// 	ldr     w8, [sp, #4]    ; load s into w8
+	// 	add     w8, w8, #1      ; increment s
+	// 	str     w8, [sp, #4]    ; store s into sp#4
+	// 	ldr     w8, [sp, #8]    ; load a into w8
+	// 	add     w8, w8, #1      ; increment a
+	// 	str     w8, [sp, #8]    ; store a into sp#8
+	// 	b       LBB0_1          ; branch to checking of loop
+	// END: LBB0_3:
+
+	comparLabel := fmt.Sprintf("LBBwhile%dcompar", g.ConditionCounter)
+	bodyLabel := fmt.Sprintf("LBBwhile%dbody", g.ConditionCounter)
+	endLabel := fmt.Sprintf("LBBwhile%dend", g.ConditionCounter)
+	g.out.WriteString("b " + comparLabel + "\n")
+	g.out.WriteString(comparLabel + ":\n")
+	g.GenerateComparisonCheck(w.Condition.(*ast.InfixExpression), bodyLabel, endLabel)
+	g.out.WriteString(bodyLabel + ":\n")
+	g.GenerateBlock(w.Body)
+	g.out.WriteString("b " + comparLabel + "\n")
+	g.out.WriteString(endLabel + ":\n")
+}
+
+func (g *AARCH64Generator) GenerateComparisonCheck(c *ast.InfixExpression, trueLab, falseLab string) {
+	defer tracer.Untrace(tracer.Trace("GenerateComparisonCheck"))
+	leftS, rightS, _ := g.GetInfixOperands(c)
+	g.out.WriteString("cmp " + leftS + ", " + rightS + "\n")
+	g.out.WriteString("cset x8, ")
+	switch c.Operator {
+	case "==":
+		g.out.WriteString("eq\n")
+	case "!=":
+		g.out.WriteString("ne\n")
+	case "<":
+		g.out.WriteString("lt\n")
+	case ">":
+		g.out.WriteString("gt\n")
+	case "<=":
+		g.out.WriteString("le\n")
+	case ">=":
+		g.out.WriteString("ge\n")
+	}
+	g.out.WriteString("tbnz x8, #0, " + trueLab + "\n")
+	g.out.WriteString("b " + falseLab + "\n")
+	g.VirtualRegisters = map[StorageLoc]string{}
 }
 
 // TODO: nested ifs!!
@@ -461,7 +512,7 @@ func (g *AARCH64Generator) GenerateVarReassignment(v *ast.VarReassignmentStateme
 		g.out.WriteString("str " + "x0" + ", " + fmt.Sprintf("[sp, #%d]", offset) + "\n")
 	case *ast.InfixExpression:
 		sloc := g.GenerateInfix(v.Value.(*ast.InfixExpression))
-		g.out.WriteString("str " + StorageLocs[sloc] + ", " + fmt.Sprintf("-%d(%%rbp)", offset) + "\n")
+		g.out.WriteString("str " + StorageLocs[sloc] + ", " + fmt.Sprintf("[sp, #%d]", offset) + "\n")
 	}
 	// remove the old value from any registers
 	sloc, _ := g.GetVarStorageLoc(v.Name.Value)
