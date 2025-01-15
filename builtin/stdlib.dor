@@ -1,0 +1,7 @@
+void print() {
+    // Stub - handled internally
+}
+
+void println() {
+    // Stub for now - need to add string handlers before this can be handled natively
+}

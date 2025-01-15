@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/westsi/dormouse/builtin"
 	"github.com/westsi/dormouse/codegen"
 	"github.com/westsi/dormouse/codegen/aarch64_clang"
 	"github.com/westsi/dormouse/codegen/x86_64_as"
@@ -138,6 +139,10 @@ func ResolveImports(prevImps []string, baseDir, imp string) ([]*lex.Lexer, []str
 	// fmt.Println("Imported:", imported)
 	prevImps = append(prevImps, imp)
 	for _, imp := range imported {
+		if strings.HasPrefix(imp, "dor.") {
+			builtin.HandleStdlib(imp)
+			continue
+		}
 		l, pi := ResolveImports(prevImps, baseDir, imp)
 		lexers = append(lexers, l...)
 		prevImps = append(prevImps, pi...)
