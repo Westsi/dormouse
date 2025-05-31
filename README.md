@@ -27,7 +27,7 @@ Download repo, install Go. `go run . PATH_TO_FILE`. As easy as it gets.
 - `-o` - file name of output file which will be placed in `out/ARCHITECTURE`
 
 ## SSA
-To see output, view `out/ssa`. An example program is shown below.
+To see output, view `out/ssa`. An example program is shown below. Note: SSA is still WIP.
 
 Before optimizations:
 ```
