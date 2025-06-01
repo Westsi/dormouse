@@ -123,6 +123,19 @@ func (i *IntegerLiteral) String() string {
 	return fmt.Sprintf("%d", i.Value)
 }
 
+type StringLiteral struct {
+	Token lex.LexedTok
+	Value string
+}
+
+func (i *StringLiteral) expressionNode() {}
+func (i *StringLiteral) Literal() string {
+	return fmt.Sprintf("token: %s, value: %s\n", i.Token.Tok.String(), i.Value)
+}
+func (i *StringLiteral) String() string {
+	return fmt.Sprintf("%s", i.Value)
+}
+
 type PrefixExpression struct {
 	Token    lex.LexedTok
 	Operator string

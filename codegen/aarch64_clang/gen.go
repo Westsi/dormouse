@@ -18,10 +18,12 @@ import (
 type AARCH64Generator struct {
 	fpath            string
 	out              strings.Builder
+	data             strings.Builder
 	AST              ast.Program
 	VirtualStack     *util.Armstack[codegen.VTabVar]
 	VirtualRegisters map[StorageLoc]string
 	ConditionCounter int
+	StringCounter    int
 	Gdefs            map[string]string
 }
 
@@ -60,6 +62,7 @@ const (
 	X28 // TODO: check if any of these are reserved/have other uses
 	NULLSTORAGE
 	DEFINES
+	DATASECT
 )
 
 var Sls = []StorageLoc{X0, X1, X2, X3, X4, X5, X6, X7, X8, X9, X10, X11, X12, X13, X14, X15, X16, X17, X18, X19, X20, X21, X22, X23, X24, X25, X26, X27, X28}
@@ -74,12 +77,16 @@ func New(fpath string, ast *ast.Program, defs map[string]string, cc int) *AARCH6
 	generator := &AARCH64Generator{
 		fpath:            fpath,
 		out:              strings.Builder{},
+		data:             strings.Builder{},
 		AST:              *ast,
 		VirtualStack:     util.NewAStack[codegen.VTabVar](32),
 		VirtualRegisters: map[StorageLoc]string{},
 		ConditionCounter: cc,
+		StringCounter:    0,
 		Gdefs:            defs,
 	}
+	generator.out.WriteString(".text\n")
+	generator.data.WriteString(".data\n")
 	os.MkdirAll("out/aarch64", os.ModePerm)
 	os.MkdirAll("out/aarch64/asm", os.ModePerm)
 	return generator
@@ -108,6 +115,10 @@ func (g *AARCH64Generator) Write() {
 	}
 	defer f.Close()
 	_, err = f.WriteString(g.out.String())
+	if err != nil {
+		panic(err)
+	}
+	_, err = f.WriteString(g.data.String())
 	if err != nil {
 		panic(err)
 	}
@@ -146,6 +157,8 @@ func (g *AARCH64Generator) GenerateExpression(node ast.Expression) StorageLoc {
 		// g.out.WriteString("mov x0, " + fmt.Sprintf("#%d", node.Value) + "\n") //TODO: give this same treatment as the identifier case - picking regs
 		// return X0
 		return g.GenerateIntegerLiteral(node)
+	case *ast.StringLiteral:
+		return g.GenerateStringLiteral(node)
 	case *ast.IfExpression:
 		g.GenerateIf(node)
 	case *ast.WhileExpression:
@@ -179,7 +192,7 @@ func (g *AARCH64Generator) GenerateReturn(r *ast.ReturnStatement) {
 	defer tracer.Untrace(tracer.Trace("GenerateReturn"))
 	// clean up stack
 	sloc := g.GenerateExpression(r.ReturnValue)
-	if sloc != NULLSTORAGE && sloc != X0 {
+	if sloc != NULLSTORAGE && sloc != X0 && sloc != DATASECT {
 		g.out.WriteString("mov " + "x0, " + StorageLocs[sloc] + "\n")
 	}
 	g.out.WriteString("add sp, sp, #32\n")
@@ -376,6 +389,14 @@ func (g *AARCH64Generator) GenerateIntegerLiteral(il *ast.IntegerLiteral) Storag
 	return sloc
 }
 
+func (g *AARCH64Generator) GenerateStringLiteral(sl *ast.StringLiteral) StorageLoc {
+	defer tracer.Untrace(tracer.Trace("GenerateStringLiteral"))
+	g.data.WriteString("string" + strconv.Itoa(g.StringCounter) + ":\n")
+	g.StringCounter++
+	g.data.WriteString(".asciz \"" + sl.Value + "\"\n")
+	return DATASECT
+}
+
 func (g *AARCH64Generator) GenerateIf(i *ast.IfExpression) {
 	tracer.Trace("GenerateIf")
 	defer tracer.Untrace("GenerateIf")
@@ -516,7 +537,7 @@ func (g *AARCH64Generator) GenerateVarReassignment(v *ast.VarReassignmentStateme
 	}
 	// remove the old value from any registers
 	sloc, _ := g.GetVarStorageLoc(v.Name.Value)
-	if sloc != NULLSTORAGE {
+	if sloc != NULLSTORAGE && sloc != DATASECT {
 		g.out.WriteString("mov " + StorageLocs[sloc] + ", #0\n")
 		delete(g.VirtualRegisters, sloc)
 	}
@@ -527,7 +548,7 @@ func (g *AARCH64Generator) GenerateCall(c *ast.CallExpression) {
 	defer tracer.Untrace("GenerateCall")
 	for i, arg := range c.Arguments {
 		sloc := g.GenerateExpression(arg)
-		if sloc != NULLSTORAGE {
+		if sloc != NULLSTORAGE && sloc != DATASECT {
 			g.out.WriteString("mov " + StorageLocs[sloc] + ", " + StorageLocs[FNCallRegs[i]] + "\n")
 		}
 	}

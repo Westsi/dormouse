@@ -46,6 +46,7 @@ func New(tokens []lex.LexedTok) *Parser {
 	p.prefixParseFuncs = make(map[lex.Token]prefixParseFunc)
 	p.registerPrefix(lex.IDENT, p.parseIdentifier)
 	p.registerPrefix(lex.INTLITERAL, p.parseIntegerLiteral)
+	p.registerPrefix(lex.STRINGLITERAL, p.parseStringLiteral)
 	p.registerPrefix(lex.NOT, p.parsePrefixExpression)
 	p.registerPrefix(lex.SUB, p.parsePrefixExpression)
 	p.registerPrefix(lex.BWNOT, p.parsePrefixExpression)
@@ -130,7 +131,7 @@ func (p *Parser) parseStatement() ast.Statement {
 		return p.parseTypeBeginStatement()
 	case lex.IDENT:
 		if p.peekTokenIs(lex.LPAREN) {
-			fmt.Println("Is function call")
+			// fmt.Println("Is function call")
 			return p.parseExpressionStatement()
 		}
 		return p.parseVarReassignment(p.curTok)
@@ -178,6 +179,13 @@ func (p *Parser) parseIntegerLiteral() ast.Expression {
 		p.errors = append(p.errors, fmt.Sprintf("could not parse %q as integer: error: %v", p.curTok.Val, err.Error()))
 	}
 	lit.Value = val
+	return lit
+}
+
+func (p *Parser) parseStringLiteral() ast.Expression {
+	defer tracer.Untrace(tracer.Trace("parseStringLiteral"))
+	lit := &ast.StringLiteral{Token: p.curTok}
+	lit.Value = p.curTok.Val
 	return lit
 }
 

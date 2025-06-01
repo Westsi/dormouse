@@ -56,6 +56,9 @@ func run(opts Options) {
 	var asmNames []string
 
 	for _, lexer := range lexers {
+		if lexer == nil {
+			continue
+		}
 		asmNames = append(asmNames, strings.Split((strings.Split(lexer.GetRdrFname(), "/")[len(strings.Split(lexer.GetRdrFname(), "/"))-1]), ".")[0]+".s")
 		fmt.Println("Compiling", lexer.GetRdrFname())
 		Compile(&opts, lexer)
@@ -100,7 +103,7 @@ func Compile(opts *Options, lexer *lex.Lexer) {
 	// ssag.Generate()
 	// ssag.Write()
 	// os.Exit(0)
-	// fmt.Println(ast.String())
+	fmt.Println(ast.String())
 	var cg codegen.CodeGenerator
 	switch opts.TargetArch {
 	case "x86_64":
@@ -140,7 +143,16 @@ func ResolveImports(prevImps []string, baseDir, imp string) ([]*lex.Lexer, []str
 	prevImps = append(prevImps, imp)
 	for _, imp := range imported {
 		if strings.HasPrefix(imp, "dor.") {
-			builtin.HandleStdlib(imp)
+			l, pi, d := builtin.HandleStdlib(prevImps, strings.Replace(imp, "dor.", "", 1))
+			for k, v := range d {
+				if val, ok := globalDefines[k]; ok {
+					// define already exists, warn of overwriting but allow it
+					fmt.Printf("WARNING: %s has already been @defined as %s. It is being overwritten.", k, val)
+				}
+				globalDefines[k] = v
+			}
+			lexers = append(lexers, l)
+			prevImps = append(prevImps, pi...)
 			continue
 		}
 		l, pi := ResolveImports(prevImps, baseDir, imp)
