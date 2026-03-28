@@ -1,8 +1,9 @@
 @import "dor.stdlib"
 
 int main() {
-    string s = "Hello World!\n"
+    int a = 3
+    string s = "Hello Jessica!\n"
     print(s)
     println("Dormouse Speaking...")
-    return 0
+    return a
 }

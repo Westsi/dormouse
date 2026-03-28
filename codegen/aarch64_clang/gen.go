@@ -25,6 +25,7 @@ type AARCH64Generator struct {
 	ConditionCounter int
 	StringCounter    int
 	Gdefs            map[string]string
+	Types            map[string]string
 }
 
 type StorageLoc int
@@ -84,6 +85,7 @@ func New(fpath string, ast *ast.Program, defs map[string]string, cc int) *AARCH6
 		ConditionCounter: cc,
 		StringCounter:    0,
 		Gdefs:            defs,
+		Types:            map[string]string{},
 	}
 	generator.out.WriteString(".text\n")
 	generator.data.WriteString(".data\n")
@@ -129,6 +131,7 @@ func (g *AARCH64Generator) GenerateFunction(f *ast.FunctionDefinition) {
 	oldVirtStack := g.VirtualStack
 	g.VirtualStack = util.NewAStack[codegen.VTabVar](32)
 	g.VirtualRegisters = map[StorageLoc]string{}
+	g.Types = map[string]string{}
 
 	if f.Name.Value == "main" {
 		g.out.WriteString(".globl _main\n")
@@ -138,7 +141,6 @@ func (g *AARCH64Generator) GenerateFunction(f *ast.FunctionDefinition) {
 
 	// setup default local stack - TODO: figure out size of stack necessary
 	g.out.WriteString("sub sp, sp, #32\n")
-	// TODO: does storing wzr need to go here?
 	// TODO: implement passing parameters
 	g.GenerateBlock(f.Body)
 
@@ -202,6 +204,10 @@ func (g *AARCH64Generator) GenerateReturn(r *ast.ReturnStatement) {
 func (g *AARCH64Generator) GenerateIdentifier(i *ast.Identifier) StorageLoc {
 	tracer.Trace("GenerateIdentifier")
 	defer tracer.Untrace("GenerateIdentifier")
+
+	if g.Types[i.Value] == "string" {
+		return DATASECT
+	}
 
 	storageLoc, err := g.GetVarStorageLoc(i.Value)
 	if storageLoc == DEFINES {
@@ -298,6 +304,15 @@ func (g *AARCH64Generator) GenerateVarDef(v *ast.VarStatement) {
 
 	stackloc := g.GetNextEmptyStackLoc()
 	g.VirtualStack.Set(codegen.VTabVar{Name: v.Name.Value, Type: v.Type.Value}, stackloc)
+
+	val, ok := g.Types[v.Name.Value]
+	if ok {
+		if val != v.Type.Value {
+			g.e(v.Name.Token, "Variable previously defined with different value.")
+		}
+	} else {
+		g.Types[v.Name.Value] = v.Type.Value
+	}
 
 	switch v.Type.Value {
 	case "int":
@@ -550,12 +565,20 @@ func (g *AARCH64Generator) GenerateCall(c *ast.CallExpression) {
 		sloc := g.GenerateExpression(arg)
 		if sloc != NULLSTORAGE && sloc != DATASECT {
 			g.out.WriteString("mov " + StorageLocs[sloc] + ", " + StorageLocs[FNCallRegs[i]] + "\n")
+		} else if sloc == DATASECT {
+			stri := fmt.Sprintf("%d", g.StringCounter-1)
+			g.out.WriteString("adrp x0, string" + stri + "@PAGE\n")
+			g.out.WriteString("add x0, x0, string" + stri + "@PAGEOFF\n")
 		}
 	}
 	// save x29 (frame pointer) and x30 (link register, holds return address) to stack before calling and potentially overwriting them
 	g.out.WriteString("stp x29, x30, [sp, #16]\n")
 	g.out.WriteString("add x29, sp, #16\n")
-	g.out.WriteString("bl _" + c.Function.Value + "\n")
+	if c.Function.Value == "print" || c.Function.Value == "println" {
+		g.out.WriteString("bl _" + "printf" + "\n")
+	} else {
+		g.out.WriteString("bl _" + c.Function.Value + "\n")
+	}
 	g.out.WriteString("ldp x29, x30, [sp, #16]\n")
 
 	for sl := range g.VirtualRegisters {
